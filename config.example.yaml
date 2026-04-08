@@ -1,0 +1,16 @@
+assignee: "your-github-username"
+label: "agent:todo"
+claudeSkill: "issue-worker"
+# claudeModel: "opus"              # optional, defaults to opus
+# claudeAllowedTools:              # optional, defaults to Edit, Write, Bash(*)
+#   - "Edit"
+#   - "Write"
+#   - "Bash(*)"
+port: 7890
+repos:
+  - owner: "org"
+    name: "repo-name"
+    path: "~/path/to/repo"
+    # defaultBranch: "main"         # optional, defaults to main
+    # slackChannel: "team-channel"  # optional, posts PR link to this channel
+    # postWorktreeHook: "pnpm i"   # optional, runs in worktree after creation
