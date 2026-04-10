@@ -170,7 +170,7 @@ export function spawnClaude(
 
   const model = config.claudeModel || "opus";
   const allowedTools = [
-    ...(config.claudeAllowedTools ?? ["Edit", "Write", "Bash(*)"]),
+    ...(config.claudeAllowedTools ?? ["Read", "Edit", "Write", "Bash(*)"]),
     ...(repo.slackChannel ? ["mcp__plugin_slack_slack__*"] : []),
   ];
   const slackPart = repo.slackChannel ? ` Post the PR to Slack channel #${repo.slackChannel}.` : "";
