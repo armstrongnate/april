@@ -35,7 +35,9 @@ export function isIssueActive(repo: RepoConfig, issueNumber: number): boolean {
   const worktreesDir = join(repo.path, ".worktrees");
   if (existsSync(worktreesDir)) {
     const dirs = readdirSync(worktreesDir);
-    if (dirs.some((d) => d.startsWith(prefix))) {
+    const match = dirs.find((d) => d.startsWith(prefix));
+    if (match) {
+      log.info(`Skipping issue #${issueNumber}: existing worktree found (${match})`);
       return true;
     }
   }
@@ -46,7 +48,9 @@ export function isIssueActive(repo: RepoConfig, issueNumber: number): boolean {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     });
-    if (output.trim().split("\n").some((s) => s.startsWith(prefix))) {
+    const match = output.trim().split("\n").find((s) => s.startsWith(prefix));
+    if (match) {
+      log.info(`Skipping issue #${issueNumber}: existing tmux session found (${match})`);
       return true;
     }
   } catch {
