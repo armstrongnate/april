@@ -190,10 +190,19 @@ export function spawnClaude(
 
   // Send the prompt via send-keys after Claude starts
   const escapedPrompt = prompt.replace(/'/g, "'\\''");
+  const session = JSON.stringify(sessionName);
   setTimeout(() => {
     try {
-      execSync(`tmux send-keys -t ${JSON.stringify(sessionName)} '${escapedPrompt}' Enter`, { stdio: "pipe" });
-      log.info(`Prompt sent to tmux session "${sessionName}"`);
+      // Send text first, then Enter after a short delay to ensure Claude's input is ready
+      execSync(`tmux send-keys -t ${session} '${escapedPrompt}'`, { stdio: "pipe" });
+      setTimeout(() => {
+        try {
+          execSync(`tmux send-keys -t ${session} C-m`, { stdio: "pipe" });
+          log.info(`Prompt sent to tmux session "${sessionName}"`);
+        } catch (err) {
+          log.warn(`Failed to send Enter to session "${sessionName}": ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }, 1000);
     } catch (err) {
       log.warn(`Failed to send prompt to session "${sessionName}": ${err instanceof Error ? err.message : String(err)}`);
     }
