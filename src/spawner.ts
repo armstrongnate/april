@@ -183,10 +183,8 @@ export function spawnClaude(
 
   const allowedToolsArgs = allowedTools.map((t) => `--allowedTools '${t}'`).join(" ");
   const claudeCommand = `claude --model ${model} ${allowedToolsArgs}`;
-  const tmuxCommand = `cd ${JSON.stringify(worktreePath)} && ${claudeCommand}`;
-
   log.info(`Spawning tmux session "${sessionName}" with claude`);
-  execSync(`tmux new-session -d -s ${JSON.stringify(sessionName)} ${JSON.stringify(tmuxCommand)}`);
+  execSync(`tmux new-session -d -s ${JSON.stringify(sessionName)} -c ${JSON.stringify(worktreePath)} ${JSON.stringify(claudeCommand)}`);
 
   // Send the prompt via send-keys after Claude starts
   const escapedPrompt = prompt.replace(/'/g, "'\\''");
