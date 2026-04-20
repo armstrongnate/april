@@ -1,11 +1,11 @@
 ---
 name: issue-worker
-description: Autonomously work a GitHub issue end-to-end — read, implement, and open a PR with no human input required.
+description: Autonomously work a GitHub issue end-to-end — read, implement, open a PR, and monitor CI/review feedback.
 ---
 
 # issue-worker
 
-You have been assigned a GitHub issue. Work it to completion autonomously. Do not stop to ask for approval or confirmation — go straight from reading the issue to opening a PR.
+You have been assigned a GitHub issue. Work it to completion autonomously. Do not stop to ask for approval or confirmation — go straight from reading the issue to opening a PR, then monitor and respond to CI failures and review feedback.
 
 ## 1. Read the issue
 
@@ -42,12 +42,28 @@ Run `git diff` and review your own changes. Fix any issues before committing.
 gh pr create --title "..." --body "..."
 ```
 
-Then update the issue labels:
+## 6. Post to Slack (if instructed)
+
+If the prompt specifies a Slack channel, use the Slack MCP tool to post a message with a link to the PR. Format: `<pr_url|PR> title of the pr`
+
+## 7. Monitor CI and review feedback
+
+After creating the PR, monitor it until all checks pass and all review feedback is addressed.
+
+Loop:
+1. Sleep for 3 minutes (`sleep 180`)
+2. Check CI status: `gh pr checks {pr_number} --repo {owner}/{repo}`
+3. If any checks failed, read the failure logs, fix the issue, commit, and push
+4. Check for review comments: `gh pr view {pr_number} --repo {owner}/{repo} --comments`
+5. If there are new or unresolved comments, address them, commit, and push
+6. Repeat from step 1
+
+Stop when:
+- All CI checks pass AND
+- No unresolved review comments remain
+
+Once everything is green, update the issue labels:
 
 ```
 gh issue edit {issue_number} --repo {owner}/{repo} --add-label agent:review --remove-label agent:wip
 ```
-
-## 6. Post to Slack (if instructed)
-
-If the prompt specifies a Slack channel, use the Slack MCP tool to post a message with a link to the PR. Format: `<pr_url|PR> title of the pr`
