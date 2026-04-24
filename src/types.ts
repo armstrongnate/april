@@ -12,7 +12,7 @@ export interface Config {
   label: string;
   claudeSkill: string;
   claudeModel?: string;
-  claudeAllowedTools?: string[];
+  claudePermissionMode?: string;
   port: number;
   repos: RepoConfig[];
 }

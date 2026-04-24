@@ -173,16 +173,12 @@ export function spawnClaude(
   }
 
   const model = config.claudeModel || "opus";
-  const allowedTools = [
-    ...(config.claudeAllowedTools ?? ["Read", "Search", "Edit", "Write", "Bash(*)"]),
-    ...(repo.slackChannel ? ["mcp__plugin_slack_slack__*"] : []),
-  ];
+  const permissionMode = config.claudePermissionMode || "auto";
   const slackPart = repo.slackChannel ? ` Post the PR to Slack channel #${repo.slackChannel}.` : "";
   const prompt = `/${config.claudeSkill} Read GitHub issue #${issue.number} on ${repo.owner}/${repo.name} using the gh CLI. Implement it and open a PR.${slackPart}`;
   log.debug(`Prompt: ${prompt}`);
 
-  const allowedToolsArgs = allowedTools.map((t) => `--allowedTools '${t}'`).join(" ");
-  const claudeCommand = `claude --model ${model} ${allowedToolsArgs}`;
+  const claudeCommand = `claude --model ${model} --permission-mode ${permissionMode}`;
   log.info(`Spawning tmux session "${sessionName}" with claude`);
   execSync(`tmux new-session -d -s ${JSON.stringify(sessionName)} -c ${JSON.stringify(worktreePath)} ${JSON.stringify(claudeCommand)}`);
 

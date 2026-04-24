@@ -2,10 +2,7 @@ assignee: "your-github-username"
 label: "agent:todo"
 claudeSkill: "issue-worker"
 # claudeModel: "opus"              # optional, defaults to opus
-# claudeAllowedTools:              # optional, defaults to Edit, Write, Bash(*)
-#   - "Edit"
-#   - "Write"
-#   - "Bash(*)"
+# claudePermissionMode: "auto"     # optional, defaults to auto (others: default, acceptEdits, plan, bypassPermissions)
 port: 7890
 repos:
   - owner: "org"

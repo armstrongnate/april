@@ -74,9 +74,7 @@ export function loadConfig(): Config {
   const label = validateString(parsed, "label", "config");
   const claudeSkill = validateString(parsed, "claudeSkill", "config");
   const claudeModel = typeof parsed.claudeModel === "string" ? parsed.claudeModel.trim() : undefined;
-  const claudeAllowedTools = Array.isArray(parsed.claudeAllowedTools)
-    ? parsed.claudeAllowedTools.filter((t: unknown) => typeof t === "string" && t.trim().length > 0).map((t: string) => t.trim())
-    : undefined;
+  const claudePermissionMode = typeof parsed.claudePermissionMode === "string" ? parsed.claudePermissionMode.trim() : undefined;
 
   const port = Number(parsed.port);
   if (!Number.isInteger(port) || port < 1024 || port > 65535) {
@@ -119,7 +117,7 @@ export function loadConfig(): Config {
     return { owner, name, path: resolvedPath, defaultBranch, slackChannel, postWorktreeHook };
   });
 
-  const config: Config = { assignee, label, claudeSkill, claudeModel, claudeAllowedTools, port, repos };
+  const config: Config = { assignee, label, claudeSkill, claudeModel, claudePermissionMode, port, repos };
 
   log.info(`Config loaded: assignee=${assignee}, label=${label}, repos=${repos.map((r) => `${r.owner}/${r.name}`).join(", ")}`);
 
