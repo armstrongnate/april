@@ -42,7 +42,6 @@ interface ForwarderState {
 const INITIAL_BACKOFF_MS = 1000;
 const MAX_BACKOFF_MS = 30_000;
 const UPTIME_RESET_MS = 60_000;
-const MAX_CONSECUTIVE_FAILURES = 5;
 
 const forwarders: ForwarderState[] = [];
 
@@ -101,14 +100,9 @@ function spawnForwarder(config: Config, repoKey: string, url: string): Forwarder
         state.backoffMs = Math.min(state.backoffMs * 2, MAX_BACKOFF_MS);
       }
 
-      if (state.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-        log.error(`Forwarder for ${repoKey} failed ${MAX_CONSECUTIVE_FAILURES} consecutive times, giving up`);
-        return;
-      }
-
       log.warn(
         `Forwarder for ${repoKey} exited (code=${code}, signal=${signal}), ` +
-          `restarting in ${state.backoffMs}ms (failure ${state.consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES})`
+          `restarting in ${state.backoffMs}ms (consecutive failures: ${state.consecutiveFailures})`
       );
 
       setTimeout(() => start(), state.backoffMs);
