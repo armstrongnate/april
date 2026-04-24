@@ -27,7 +27,15 @@ gh issue view {issue_number} --repo {owner}/{repo} --comments
 
 ## 4. Review
 
-Run `/ultrareview` to review your own changes. Fix any issues it identifies before committing.
+Run `/simplify` to review your changes for reuse, quality, and efficiency, and fix anything it surfaces.
+
+Then do a quick manual pass on things `/simplify` won't catch:
+
+- **Correctness:** Does the change fully address the issue? Any missing edge cases?
+- **Tests:** Are the tests meaningful, or are they just asserting on mocks?
+- **Cleanup:** Any leftover debug code, TODOs, or commented-out lines?
+
+Fix anything you find before moving on.
 
 ## 5. Commit, push, and open a PR
 
