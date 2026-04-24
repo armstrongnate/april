@@ -25,16 +25,9 @@ gh issue view {issue_number} --repo {owner}/{repo} --comments
 - Write or update tests as appropriate
 - Ensure the code builds/lints/passes tests
 
-## 4. Review and simplify
+## 4. Review
 
-Run `git diff` and review your own changes. Fix any issues before committing.
-
-- **Correctness:** Does it fully address the issue? Missing edge cases?
-- **Simplify:** Can anything be combined, inlined, or removed? Prefer fewer files, less indirection, and no unnecessary abstractions.
-- **Reuse:** Are you duplicating logic that already exists in the codebase? Use existing helpers and patterns.
-- **Cleanup:** Remove leftover debug code, TODOs, unused imports, and dead code.
-- **Style:** Match the conventions of the surrounding code.
-- **Tests:** Are the tests meaningful, not just testing mocks?
+Run `/ultrareview` to review your own changes. Fix any issues it identifies before committing.
 
 ## 5. Commit, push, and open a PR
 
