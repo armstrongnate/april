@@ -9,6 +9,10 @@ april watches for GitHub issues assigned to you with a specific label, then spin
 - [Node.js](https://nodejs.org/) >= 22
 - [pnpm](https://pnpm.io/)
 - [gh](https://cli.github.com/) (authenticated)
+- The [gh webhook extension](https://github.com/cli/gh-webhook):
+  ```bash
+  gh extension install cli/gh-webhook
+  ```
 - [tmux](https://github.com/tmux/tmux)
 - [Claude Code](https://claude.ai/claude-code) CLI
 
