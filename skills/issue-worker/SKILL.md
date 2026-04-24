@@ -44,7 +44,7 @@ gh pr create --title "..." --body "..."
 
 ## 6. Post to Slack (if instructed)
 
-If the prompt specifies a Slack channel, use the Slack MCP tool to post a message with a link to the PR. Format: `<pr_url|PR> title of the pr`
+If the prompt specifies a Slack channel, use the Slack MCP tool to post a message with a link to the PR. Format: `<pr_url|PR> repo-name: title of the pr`
 
 ## 7. Monitor CI and review feedback
 
