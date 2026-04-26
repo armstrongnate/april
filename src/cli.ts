@@ -2,6 +2,7 @@
 import { backend } from "./service/index.js";
 import { run as runInit } from "./commands/init.js";
 import { run as runUpgrade } from "./commands/upgrade.js";
+import { run as runInstallSkill } from "./commands/install-skill.js";
 
 const HELP = `april — issue worker
 
@@ -9,10 +10,12 @@ Usage:
   april <command> [options]
 
 Commands:
-  init              Copy bundled config + skill to ~/.config/april and ~/.claude
+  init              Copy bundled config + skill to ~/.config/april and ~/.claude (only if missing).
   install [--print] Install and start the user service. --print emits the unit/plist to stdout instead.
-  upgrade [VER]     Upgrade the npm package, regenerate the unit, and restart. VER defaults to "latest".
-                    Pass --with npm|pnpm|yarn to override the auto-detected package manager.
+  install-skill [-y] Install or refresh the issue-worker skill. Prompts before overwriting an existing
+                    one; --yes (-y) skips the prompt.
+  upgrade [VER]     Upgrade the npm package, regenerate the unit, restart, and reconcile the skill.
+                    VER defaults to "latest". --with npm|pnpm|yarn overrides the package manager.
   uninstall         Stop and remove the user service
   start             Start the service
   stop              Stop the service
@@ -23,9 +26,9 @@ Commands:
   help              Show this help
   version           Show version
 
-Options for init:
-  --force, -f       Overwrite the bundled skill at ~/.claude/skills/issue-worker/SKILL.md.
-                    Config is never overwritten — to reset, delete it and re-run init.
+Notes:
+  Nothing is ever overwritten silently. To reset config, delete ~/.config/april/config.yaml
+  and re-run init. To refresh the skill, use install-skill (it prompts before overwriting).
 `;
 
 function parseLogsArgs(args: string[]): { follow: boolean; lines: number } {
@@ -79,6 +82,10 @@ async function main(): Promise<number> {
 
   if (cmd === "upgrade") {
     return runUpgrade(rest);
+  }
+
+  if (cmd === "install-skill") {
+    return await runInstallSkill(rest);
   }
 
   if (cmd === "daemon") {

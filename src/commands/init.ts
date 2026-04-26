@@ -1,45 +1,22 @@
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { ensureEnvFile, envFilePath } from "../service/envfile.js";
 import { isGhWebhookExtensionInstalled, GH_EXTENSION_INSTALL_CMD } from "../precheck.js";
-
-export const SKILL_DST = join(homedir(), ".claude", "skills", "issue-worker", "SKILL.md");
-
-export function bundledSkillPath(): string {
-  const here = fileURLToPath(import.meta.url);
-  return resolve(dirname(here), "..", "..", "skills", "issue-worker", "SKILL.md");
-}
-
-export type SkillState = "missing" | "matches-bundled" | "differs-from-bundled";
-
-export function compareSkill(): SkillState {
-  if (!existsSync(SKILL_DST)) return "missing";
-  const src = bundledSkillPath();
-  if (!existsSync(src)) return "matches-bundled"; // bundle missing, can't compare; don't alarm
-  const a = readFileSync(SKILL_DST);
-  const b = readFileSync(src);
-  return a.equals(b) ? "matches-bundled" : "differs-from-bundled";
-}
+import { SKILL_DST, bundledSkillPath, compareSkill } from "../skill.js";
 
 // Resolve the bundled package root from this file's installed location.
-// dist/commands/init.js -> dist/.. (the package root, where config.example.yaml + skills/ live)
+// dist/commands/init.js -> dist/.. (the package root, where config.example.yaml lives)
 function packageRoot(): string {
   const here = fileURLToPath(import.meta.url);
   return resolve(dirname(here), "..", "..");
 }
 
-function copyOrSkip(
-  src: string,
-  dst: string,
-  label: string,
-  overwrite: boolean,
-  hint: string
-): "wrote" | "exists" {
+function copyIfMissing(src: string, dst: string, label: string): "wrote" | "exists" {
   mkdirSync(dirname(dst), { recursive: true });
-  if (existsSync(dst) && !overwrite) {
-    console.log(`  ${label}: already exists at ${dst} (${hint})`);
+  if (existsSync(dst)) {
+    console.log(`  ${label}: already exists at ${dst}`);
     return "exists";
   }
   copyFileSync(src, dst);
@@ -47,8 +24,7 @@ function copyOrSkip(
   return "wrote";
 }
 
-export function run(args: string[]): number {
-  const force = args.includes("--force") || args.includes("-f");
+export function run(_args: string[]): number {
   const root = packageRoot();
 
   console.log("april init");
@@ -60,22 +36,14 @@ export function run(args: string[]): number {
     console.error(`  Cannot find bundled config.example.yaml at ${configSrc}`);
     return 1;
   }
-  // Config is never overwritten — it contains user secrets and edits.
-  // To reset: delete it manually, then re-run `april init`.
-  const configResult = copyOrSkip(
-    configSrc,
-    configDst,
-    "config",
-    false,
-    "kept — delete the file and re-run init to start fresh"
-  );
+  const configResult = copyIfMissing(configSrc, configDst, "config");
 
   const skillSrc = bundledSkillPath();
   if (!existsSync(skillSrc)) {
     console.error(`  Cannot find bundled skill at ${skillSrc}`);
     return 1;
   }
-  copyOrSkip(skillSrc, SKILL_DST, "skill", force, "use --force to overwrite with bundled version");
+  copyIfMissing(skillSrc, SKILL_DST, "skill");
 
   const envState = ensureEnvFile();
   console.log(
@@ -90,6 +58,12 @@ export function run(args: string[]): number {
     console.log("  ✗ gh extension cli/gh-webhook NOT installed");
     console.log(`    Install with:  ${GH_EXTENSION_INSTALL_CMD}`);
     console.log("    (april will refuse to start without it.)");
+  }
+
+  // If the installed skill differs from what we shipped, surface it without prompting.
+  if (compareSkill() === "differs-from-bundled") {
+    console.log("");
+    console.log(`  i  installed skill differs from bundled. Refresh with: april install-skill`);
   }
 
   console.log("");

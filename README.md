@@ -112,8 +112,10 @@ Healthy logs include `Starting webhook forwarder for <repo>` and no immediate er
 
 | Command | What it does |
 | --- | --- |
-| `april init` | Copies the bundled `config.example.yaml` to `~/.config/april/config.yaml` (never overwritten — delete it manually to reset) and the `issue-worker` skill to `~/.claude/skills/` (use `--force` to overwrite the skill). |
+| `april init` | Copies the bundled `config.example.yaml` to `~/.config/april/config.yaml` and the `issue-worker` skill to `~/.claude/skills/`. **Only writes files that don't already exist** — never overwrites. |
 | `april install` | Installs and starts the user service. Pass `--print` to see the unit/plist without writing it. |
+| `april install-skill [-y]` | Install or refresh the issue-worker skill. Prompts before overwriting an existing copy; `--yes` skips the prompt (use in non-interactive scripts). |
+| `april upgrade [VER]` | Upgrade the npm package, regenerate the unit, restart the service, and reconcile the skill. |
 | `april uninstall` | Stops and removes the service. |
 | `april start` / `stop` / `restart` | Lifecycle. |
 | `april status` | Shows service status. |
@@ -185,9 +187,15 @@ april restart
 
 **If you skip `april install` after upgrading, new template features (`EnvironmentFile=`, env-var changes, etc.) will not appear in your existing unit file** — `npm` only updates the package, not anything systemd has on disk.
 
-`april upgrade` does **not** overwrite the issue-worker skill at `~/.claude/skills/issue-worker/SKILL.md` (you might have customized it). After upgrade, it prints a notice if the bundled skill differs from yours; refresh with `april init --force` if you want the new bundled version.
+`april upgrade` ends by running `april install-skill`, which:
 
-`--force` only touches the skill. Your `~/.config/april/config.yaml` is never overwritten by any `april` command — to reset it from the example, delete the file manually and re-run `april init`.
+- silently installs the skill if missing,
+- says "already up to date" if your installed copy matches the bundled one, or
+- **prompts you** before overwriting if your copy differs (in case you customized it).
+
+For non-interactive scripts, pass `--yes` to `april install-skill` (or to the upgrade flow indirectly: `april install-skill -y`).
+
+Your `~/.config/april/config.yaml` is never overwritten by any `april` command. To reset it from the example, delete the file manually and re-run `april init`.
 
 ## Troubleshooting
 

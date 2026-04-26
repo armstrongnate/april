@@ -1,13 +1,11 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { compareSkill, SKILL_DST } from "./init.js";
 
 const PACKAGE = "@armstrongnate/april";
 
 type PackageManager = "npm" | "pnpm" | "yarn";
 
 function detectPackageManager(): PackageManager {
-  // Where this script lives reveals which global install dir it's in.
   const here = fileURLToPath(import.meta.url);
   if (/[\\/]\.?pnpm[\\/]|[\\/]Library[\\/]pnpm[\\/]/.test(here)) return "pnpm";
   if (/[\\/]\.config[\\/]yarn[\\/]|[\\/]\.yarn[\\/]/.test(here)) return "yarn";
@@ -37,7 +35,6 @@ function step(name: string, cmd: string, args: string[]): void {
 export function run(args: string[]): number {
   let pm: PackageManager = detectPackageManager();
 
-  // --with <pm> override
   const withIdx = args.indexOf("--with");
   if (withIdx >= 0) {
     const v = args[withIdx + 1];
@@ -49,7 +46,6 @@ export function run(args: string[]): number {
   }
 
   let ref = `${PACKAGE}@latest`;
-  // Allow `april upgrade <version>` to pin
   const positional = args.filter((a, i) => !a.startsWith("--") && args[i - 1] !== "--with");
   if (positional[0]) ref = `${PACKAGE}@${positional[0]}`;
 
@@ -60,21 +56,8 @@ export function run(args: string[]): number {
   // From here on, `april` resolves to the freshly installed binary on PATH.
   step("Regenerating service unit (april install)", "april", ["install"]);
   step("Restarting service (april restart)", "april", ["restart"]);
+  step("Reconciling skill (april install-skill)", "april", ["install-skill"]);
 
   console.log("\n✓ Upgrade complete. Tail logs with: april logs -f");
-
-  // Skill notice — never auto-overwrite, but tell the user where they stand.
-  const state = compareSkill();
-  if (state === "missing") {
-    console.log(`\nNote: issue-worker skill not found at ${SKILL_DST}. Run \`april init\` to install it.`);
-  } else if (state === "differs-from-bundled") {
-    console.log(
-      `\nNote: bundled issue-worker skill differs from the one at ${SKILL_DST}.\n` +
-        `      This may be the upgrade's new version or your own customization.\n` +
-        `      To overwrite with the bundled version: april init --force\n` +
-        `      (--force only refreshes the skill; your config is never overwritten.)`
-    );
-  }
-
   return 0;
 }
