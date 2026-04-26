@@ -1,6 +1,6 @@
 {
   "name": "@armstrongnate/april",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "She does all the work so you don't have to. Watches GitHub issues and spawns Claude Code sessions to work them.",
   "type": "module",
   "bin": {
