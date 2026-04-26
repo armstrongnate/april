@@ -149,6 +149,12 @@ After editing:
 - **Linux** uses systemd user services at `~/.config/systemd/user/april.service`. Logs go to the journal (`journalctl --user -u april`).
 - **macOS** uses launchd LaunchAgents at `~/Library/LaunchAgents/dev.april.daemon.plist`. Logs go to `~/Library/Logs/april/april.log`.
 
+### Restarts and tmux sessions
+
+The unit/plist sets `KillMode=process` (systemd) / `AbandonProcessGroup=true` (launchd), which means `april restart` only signals the daemon itself — tmux sessions and the Claude processes inside them keep running. The daemon's shutdown handler explicitly terminates the `gh webhook forward` children before exiting.
+
+If the daemon ever has to be SIGKILLed (it hung past the systemd stop timeout), the forwarders will be orphaned to PID 1. Clean them up with `pkill -f 'gh webhook forward'`.
+
 ### Node version managers
 
 `april install` captures the absolute path of the `node` binary it was invoked with (e.g. `~/.nvm/versions/node/v22.x.x/bin/node`) and bakes it into the unit/plist. If you later remove or change that node version, the service will fail to start — re-run `april install` after switching.

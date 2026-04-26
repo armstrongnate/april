@@ -40,6 +40,10 @@ Environment=NODE_ENV=production
 EnvironmentFile=-${envFilePath()}
 StandardOutput=journal
 StandardError=journal
+# Only signal the main process on stop; leave tmux sessions and any other
+# children running so an april restart doesn't trash in-flight Claude work.
+# The daemon's own shutdown handler still SIGTERMs the gh webhook forwarders.
+KillMode=process
 
 [Install]
 WantedBy=default.target
