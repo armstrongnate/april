@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { compareSkill, SKILL_DST } from "./init.js";
 
 const PACKAGE = "@armstrongnate/april";
 
@@ -61,5 +62,18 @@ export function run(args: string[]): number {
   step("Restarting service (april restart)", "april", ["restart"]);
 
   console.log("\n✓ Upgrade complete. Tail logs with: april logs -f");
+
+  // Skill notice — never auto-overwrite, but tell the user where they stand.
+  const state = compareSkill();
+  if (state === "missing") {
+    console.log(`\nNote: issue-worker skill not found at ${SKILL_DST}. Run \`april init\` to install it.`);
+  } else if (state === "differs-from-bundled") {
+    console.log(
+      `\nNote: bundled issue-worker skill differs from the one at ${SKILL_DST}.\n` +
+        `      This may be the upgrade's new version or your own customization.\n` +
+        `      To overwrite with the bundled version: april init --force`
+    );
+  }
+
   return 0;
 }

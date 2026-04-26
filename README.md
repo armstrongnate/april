@@ -185,6 +185,8 @@ april restart
 
 **If you skip `april install` after upgrading, new template features (`EnvironmentFile=`, env-var changes, etc.) will not appear in your existing unit file** — `npm` only updates the package, not anything systemd has on disk.
 
+`april upgrade` does **not** overwrite the issue-worker skill at `~/.claude/skills/issue-worker/SKILL.md` (you might have customized it). After upgrade, it prints a notice if the bundled skill differs from yours; refresh with `april init --force` if you want the new bundled version.
+
 ## Troubleshooting
 
 ### `Required gh extension not installed: cli/gh-webhook`

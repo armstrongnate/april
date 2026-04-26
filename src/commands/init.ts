@@ -1,9 +1,27 @@
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { ensureEnvFile, envFilePath } from "../service/envfile.js";
 import { isGhWebhookExtensionInstalled, GH_EXTENSION_INSTALL_CMD } from "../precheck.js";
+
+export const SKILL_DST = join(homedir(), ".claude", "skills", "issue-worker", "SKILL.md");
+
+export function bundledSkillPath(): string {
+  const here = fileURLToPath(import.meta.url);
+  return resolve(dirname(here), "..", "..", "skills", "issue-worker", "SKILL.md");
+}
+
+export type SkillState = "missing" | "matches-bundled" | "differs-from-bundled";
+
+export function compareSkill(): SkillState {
+  if (!existsSync(SKILL_DST)) return "missing";
+  const src = bundledSkillPath();
+  if (!existsSync(src)) return "matches-bundled"; // bundle missing, can't compare; don't alarm
+  const a = readFileSync(SKILL_DST);
+  const b = readFileSync(src);
+  return a.equals(b) ? "matches-bundled" : "differs-from-bundled";
+}
 
 // Resolve the bundled package root from this file's installed location.
 // dist/commands/init.js -> dist/.. (the package root, where config.example.yaml + skills/ live)
@@ -38,13 +56,12 @@ export function run(args: string[]): number {
   }
   const configResult = copyIfMissing(configSrc, configDst, "config", force);
 
-  const skillSrc = join(root, "skills", "issue-worker", "SKILL.md");
-  const skillDst = join(homedir(), ".claude", "skills", "issue-worker", "SKILL.md");
+  const skillSrc = bundledSkillPath();
   if (!existsSync(skillSrc)) {
     console.error(`  Cannot find bundled skill at ${skillSrc}`);
     return 1;
   }
-  copyIfMissing(skillSrc, skillDst, "skill", force);
+  copyIfMissing(skillSrc, SKILL_DST, "skill", force);
 
   const envState = ensureEnvFile();
   console.log(
