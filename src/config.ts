@@ -4,6 +4,7 @@ import { resolve, join } from "node:path";
 import { homedir } from "node:os";
 import { parse as parseYaml } from "yaml";
 import { createLogger } from "./logger.js";
+import { isGhWebhookExtensionInstalled, GH_EXTENSION_INSTALL_CMD } from "./precheck.js";
 import type { Config, RepoConfig } from "./types.js";
 
 const log = createLogger("config");
@@ -46,6 +47,13 @@ function validateTools(): void {
         `Required tool "${tool}" not found on PATH. Install it before running april.`
       );
     }
+  }
+
+  if (!isGhWebhookExtensionInstalled()) {
+    throw new Error(
+      `Required gh extension not installed: cli/gh-webhook.\n` +
+        `Install it with:\n  ${GH_EXTENSION_INSTALL_CMD}`
+    );
   }
 }
 

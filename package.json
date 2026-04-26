@@ -1,12 +1,22 @@
 {
-  "name": "april",
-  "version": "0.0.1",
-  "private": true,
+  "name": "@armstrongnate/april",
+  "version": "0.0.3",
+  "description": "She does all the work so you don't have to. Watches GitHub issues and spawns Claude Code sessions to work them.",
   "type": "module",
+  "bin": {
+    "april": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "config.example.yaml",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prepublishOnly": "pnpm build"
   },
   "engines": {
     "node": ">=22.0.0"
