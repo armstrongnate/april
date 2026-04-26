@@ -24,7 +24,8 @@ Commands:
   version           Show version
 
 Options for init:
-  --force, -f       Overwrite existing files
+  --force, -f       Overwrite the bundled skill at ~/.claude/skills/issue-worker/SKILL.md.
+                    Config is never overwritten — to reset, delete it and re-run init.
 `;
 
 function parseLogsArgs(args: string[]): { follow: boolean; lines: number } {

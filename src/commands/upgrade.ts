@@ -71,7 +71,8 @@ export function run(args: string[]): number {
     console.log(
       `\nNote: bundled issue-worker skill differs from the one at ${SKILL_DST}.\n` +
         `      This may be the upgrade's new version or your own customization.\n` +
-        `      To overwrite with the bundled version: april init --force`
+        `      To overwrite with the bundled version: april init --force\n` +
+        `      (--force only refreshes the skill; your config is never overwritten.)`
     );
   }
 

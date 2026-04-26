@@ -30,10 +30,16 @@ function packageRoot(): string {
   return resolve(dirname(here), "..", "..");
 }
 
-function copyIfMissing(src: string, dst: string, label: string, force: boolean): "wrote" | "exists" {
+function copyOrSkip(
+  src: string,
+  dst: string,
+  label: string,
+  overwrite: boolean,
+  hint: string
+): "wrote" | "exists" {
   mkdirSync(dirname(dst), { recursive: true });
-  if (existsSync(dst) && !force) {
-    console.log(`  ${label}: already exists at ${dst} (use --force to overwrite)`);
+  if (existsSync(dst) && !overwrite) {
+    console.log(`  ${label}: already exists at ${dst} (${hint})`);
     return "exists";
   }
   copyFileSync(src, dst);
@@ -54,14 +60,22 @@ export function run(args: string[]): number {
     console.error(`  Cannot find bundled config.example.yaml at ${configSrc}`);
     return 1;
   }
-  const configResult = copyIfMissing(configSrc, configDst, "config", force);
+  // Config is never overwritten — it contains user secrets and edits.
+  // To reset: delete it manually, then re-run `april init`.
+  const configResult = copyOrSkip(
+    configSrc,
+    configDst,
+    "config",
+    false,
+    "kept — delete the file and re-run init to start fresh"
+  );
 
   const skillSrc = bundledSkillPath();
   if (!existsSync(skillSrc)) {
     console.error(`  Cannot find bundled skill at ${skillSrc}`);
     return 1;
   }
-  copyIfMissing(skillSrc, SKILL_DST, "skill", force);
+  copyOrSkip(skillSrc, SKILL_DST, "skill", force, "use --force to overwrite with bundled version");
 
   const envState = ensureEnvFile();
   console.log(
