@@ -51,6 +51,10 @@ If the prompt specifies a Slack channel, use the Slack MCP tool to post a messag
 
 After creating the PR, monitor it until all checks pass and all review feedback is addressed.
 
+Note: the "claude review" CI check turns green as soon as Claude *posts* a review — it does
+not indicate the review was clean. Always read the actual review comments before deciding
+the PR is done.
+
 Loop:
 1. Sleep for 3 minutes (`sleep 180`)
 2. Check CI status: `gh pr checks {pr_number} --repo {owner}/{repo}`
