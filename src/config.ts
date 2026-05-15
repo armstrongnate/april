@@ -5,7 +5,8 @@ import { homedir } from "node:os";
 import { parse as parseYaml } from "yaml";
 import { createLogger } from "./logger.js";
 import { isGhWebhookExtensionInstalled, GH_EXTENSION_INSTALL_CMD } from "./precheck.js";
-import type { Config, RepoConfig } from "./types.js";
+import { AGENT_KINDS, getAgent } from "./agents.js";
+import type { AgentKind, ClaudeConfig, CodexConfig, Config, RepoConfig } from "./types.js";
 
 const log = createLogger("config");
 
@@ -37,8 +38,8 @@ function findConfigPath(): string {
   );
 }
 
-function validateTools(): void {
-  const tools = ["gh", "tmux", "git", "claude"];
+function validateTools(agentCli: string): void {
+  const tools = ["gh", "tmux", "git", agentCli];
   for (const tool of tools) {
     try {
       execSync(`which ${tool}`, { stdio: "pipe" });
@@ -65,13 +66,48 @@ function validateString(obj: Record<string, unknown>, key: string, context: stri
   return val.trim();
 }
 
-export function loadConfig(): Config {
-  validateTools();
+function optionalObject(obj: Record<string, unknown>, key: string, context: string): Record<string, unknown> | undefined {
+  const val = obj[key];
+  if (val === undefined || val === null) return undefined;
+  if (typeof val !== "object" || Array.isArray(val)) {
+    throw new Error(`${context}: "${key}" must be an object when provided`);
+  }
+  return val as Record<string, unknown>;
+}
 
-  const configPath = findConfigPath();
-  log.info(`Loading config from ${configPath}`);
+function optionalString(obj: Record<string, unknown>, key: string): string | undefined {
+  const val = obj[key];
+  return typeof val === "string" && val.trim().length > 0 ? val.trim() : undefined;
+}
 
-  const raw = readFileSync(configPath, "utf-8");
+function parseLlm(parsed: Record<string, unknown>): AgentKind {
+  const llmRaw = parsed.llm;
+  if (typeof llmRaw !== "string" || !AGENT_KINDS.includes(llmRaw as AgentKind)) {
+    throw new Error(`config: "llm" is required and must be one of ${AGENT_KINDS.join(", ")}`);
+  }
+  return llmRaw as AgentKind;
+}
+
+function parseClaudeConfig(parsed: Record<string, unknown>): ClaudeConfig | undefined {
+  const raw = optionalObject(parsed, "claude", "config");
+  if (!raw) return undefined;
+  return {
+    model: optionalString(raw, "model"),
+    permissionMode: optionalString(raw, "permissionMode"),
+  };
+}
+
+function parseCodexConfig(parsed: Record<string, unknown>): CodexConfig | undefined {
+  const raw = optionalObject(parsed, "codex", "config");
+  if (!raw) return undefined;
+  return {
+    model: optionalString(raw, "model"),
+    askForApproval: optionalString(raw, "askForApproval"),
+  };
+}
+
+export function parseConfigFile(path: string): Config {
+  const raw = readFileSync(path, "utf-8");
   const parsed = parseYaml(raw);
 
   if (!parsed || typeof parsed !== "object") {
@@ -80,9 +116,11 @@ export function loadConfig(): Config {
 
   const assignee = validateString(parsed, "assignee", "config");
   const label = validateString(parsed, "label", "config");
-  const claudeSkill = validateString(parsed, "claudeSkill", "config");
-  const claudeModel = typeof parsed.claudeModel === "string" ? parsed.claudeModel.trim() : undefined;
-  const claudePermissionMode = typeof parsed.claudePermissionMode === "string" ? parsed.claudePermissionMode.trim() : undefined;
+  const root = parsed as Record<string, unknown>;
+  const llm = parseLlm(root);
+  const skill = validateString(root, "skill", "config");
+  const claude = parseClaudeConfig(root);
+  const codex = parseCodexConfig(root);
 
   const port = Number(parsed.port);
   if (!Number.isInteger(port) || port < 1024 || port > 65535) {
@@ -125,9 +163,43 @@ export function loadConfig(): Config {
     return { owner, name, path: resolvedPath, defaultBranch, slackChannel, postWorktreeHook };
   });
 
-  const config: Config = { assignee, label, claudeSkill, claudeModel, claudePermissionMode, port, repos };
+  const config: Config = { assignee, label, llm, skill, claude, codex, port, repos };
 
-  log.info(`Config loaded: assignee=${assignee}, label=${label}, repos=${repos.map((r) => `${r.owner}/${r.name}`).join(", ")}`);
+  return config;
+}
+
+/**
+ * Best-effort lookup of the configured LLM kind, for commands that touch
+ * agent-specific paths (e.g. install-skill) but should still work before the
+ * user has written a config. Returns "claude" as a fallback.
+ */
+export function configuredLlmKind(): AgentKind {
+  try {
+    const path = findConfigPath();
+    const raw = readFileSync(path, "utf-8");
+    const parsed = parseYaml(raw);
+    if (!parsed || typeof parsed !== "object") return "claude";
+    const llm = (parsed as Record<string, unknown>).llm;
+    return typeof llm === "string" && AGENT_KINDS.includes(llm as AgentKind)
+      ? (llm as AgentKind)
+      : "claude";
+  } catch {
+    return "claude";
+  }
+}
+
+export function loadConfig(): Config {
+  const configPath = findConfigPath();
+  log.info(`Loading config from ${configPath}`);
+
+  const config = parseConfigFile(configPath);
+
+  validateTools(getAgent(config.llm).cli);
+
+  log.info(
+    `Config loaded: assignee=${config.assignee}, label=${config.label}, llm=${config.llm}, ` +
+      `repos=${config.repos.map((r) => `${r.owner}/${r.name}`).join(", ")}`
+  );
 
   return config;
 }

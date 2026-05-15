@@ -3,6 +3,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { createLogger } from "./logger.js";
 import { makeSlug } from "./slug.js";
+import { getAgent } from "./agents.js";
 import type { Config, RepoConfig, IssueInfo } from "./types.js";
 
 const log = createLogger("spawner");
@@ -156,7 +157,7 @@ export async function createWorktree(repo: RepoConfig, branch: string): Promise<
   return worktreePath;
 }
 
-export function spawnClaude(
+export function spawnAgent(
   config: Config,
   repo: RepoConfig,
   issue: IssueInfo,
@@ -172,22 +173,22 @@ export function spawnClaude(
     // Session does not exist, proceed
   }
 
-  const model = config.claudeModel || "opus";
-  const permissionMode = config.claudePermissionMode || "auto";
+  const agent = getAgent(config.llm);
   const slackPart = repo.slackChannel ? ` Post the PR to Slack channel #${repo.slackChannel}.` : "";
-  const prompt = `/${config.claudeSkill} Read GitHub issue #${issue.number} on ${repo.owner}/${repo.name} using the gh CLI. Implement it and open a PR.${slackPart}`;
+  const promptBody = `Read GitHub issue #${issue.number} on ${repo.owner}/${repo.name} using the gh CLI. Implement it and open a PR.${slackPart}`;
+  const prompt = agent.buildPrompt(config.skill, promptBody);
   log.debug(`Prompt: ${prompt}`);
 
-  const claudeCommand = `claude --model ${model} --permission-mode ${permissionMode}`;
-  log.info(`Spawning tmux session "${sessionName}" with claude`);
-  execSync(`tmux new-session -d -s ${JSON.stringify(sessionName)} -c ${JSON.stringify(worktreePath)} ${JSON.stringify(claudeCommand)}`);
+  const agentCommand = agent.buildCommand(config);
+  log.info(`Spawning tmux session "${sessionName}" with ${agent.kind}`);
+  execSync(`tmux new-session -d -s ${JSON.stringify(sessionName)} -c ${JSON.stringify(worktreePath)} ${JSON.stringify(agentCommand)}`);
 
-  // Send the prompt via send-keys after Claude starts
+  // Send the prompt via send-keys after the agent starts
   const escapedPrompt = prompt.replace(/'/g, "'\\''");
   const session = JSON.stringify(sessionName);
   setTimeout(() => {
     try {
-      // Send text first, then Enter after a short delay to ensure Claude's input is ready
+      // Send text first, then Enter after a short delay to ensure the agent's input is ready
       execSync(`tmux send-keys -t ${session} '${escapedPrompt}'`, { stdio: "pipe" });
       setTimeout(() => {
         try {
@@ -227,11 +228,11 @@ export async function handleNewIssue(
     return;
   }
 
-  // Spawn tmux + claude
+  // Spawn tmux + agent
   try {
-    spawnClaude(config, repo, issue, worktreePath, slug);
+    spawnAgent(config, repo, issue, worktreePath, slug);
   } catch (err) {
-    log.error(`Failed to spawn claude for #${issue.number}: ${err instanceof Error ? err.message : String(err)}`);
+    log.error(`Failed to spawn ${config.llm} for #${issue.number}: ${err instanceof Error ? err.message : String(err)}`);
     return;
   }
 

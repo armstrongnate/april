@@ -1,8 +1,13 @@
 assignee: "your-github-username"
 label: "agent:todo"
-claudeSkill: "issue-worker"
-# claudeModel: "opus"              # optional, defaults to opus
-# claudePermissionMode: "auto"     # optional, defaults to auto (others: default, acceptEdits, plan, bypassPermissions)
+llm: "claude"               # "claude" or "codex"
+skill: "issue-worker"
+claude:
+  # model: "opus"           # defaults to opus
+  # permissionMode: "auto"  # defaults to auto
+codex:
+  # model: "gpt-5.1-codex-max" # omit to use codex's configured default
+  # askForApproval: "never"    # defaults to never; e.g. "on-request"
 port: 7890
 repos:
   - owner: "org"

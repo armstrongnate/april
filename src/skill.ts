@@ -1,23 +1,30 @@
 import { fileURLToPath } from "node:url";
-import { dirname, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { configuredLlmKind } from "./config.js";
+import { getAgent } from "./agents.js";
+import type { AgentKind } from "./types.js";
 
-export const SKILL_DST = join(homedir(), ".claude", "skills", "issue-worker", "SKILL.md");
+const SKILL_NAME = "issue-worker";
 
 export function bundledSkillPath(): string {
   // dist/skill.js -> dist/.. -> package root, then skills/issue-worker/SKILL.md
   const here = fileURLToPath(import.meta.url);
-  return resolve(dirname(here), "..", "skills", "issue-worker", "SKILL.md");
+  return resolve(dirname(here), "..", "skills", SKILL_NAME, "SKILL.md");
+}
+
+export function skillDestPath(kind: AgentKind = configuredLlmKind()): string {
+  return getAgent(kind).skillFile(SKILL_NAME);
 }
 
 export type SkillState = "missing" | "matches-bundled" | "differs-from-bundled";
 
-export function compareSkill(): SkillState {
-  if (!existsSync(SKILL_DST)) return "missing";
+export function compareSkill(kind: AgentKind = configuredLlmKind()): SkillState {
+  const dst = skillDestPath(kind);
+  if (!existsSync(dst)) return "missing";
   const src = bundledSkillPath();
   if (!existsSync(src)) return "matches-bundled"; // can't compare; don't alarm
-  return readFileSync(SKILL_DST).equals(readFileSync(src))
+  return readFileSync(dst).equals(readFileSync(src))
     ? "matches-bundled"
     : "differs-from-bundled";
 }

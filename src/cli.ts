@@ -10,7 +10,7 @@ Usage:
   april <command> [options]
 
 Commands:
-  init              Copy bundled config + skill to ~/.config/april and ~/.claude (only if missing).
+  init              Copy bundled config, skill, and env file if missing.
   install [--print] Install and start the user service. --print emits the unit/plist to stdout instead.
   install-skill [-y] Install or refresh the issue-worker skill. Prompts before overwriting an existing
                     one; --yes (-y) skips the prompt.

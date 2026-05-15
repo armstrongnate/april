@@ -2,7 +2,7 @@
 
 She does all the work so you don't have to, and with about the same level of enthusiasm.
 
-april watches for GitHub issues assigned to you with a specific label, then spins up a Claude Code session in a tmux window to work the issue end-to-end — from reading the issue to opening a PR.
+april watches for GitHub issues assigned to you with a specific label, then spins up a coding-agent session in a tmux window to work the issue end-to-end — from reading the issue to opening a PR. Supports [Claude Code](https://claude.ai/claude-code) and [OpenAI Codex CLI](https://developers.openai.com/codex/cli) — pick one per install via config.
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ april watches for GitHub issues assigned to you with a specific label, then spin
 - [gh](https://cli.github.com/) (authenticated)
 - The [`gh-webhook` extension](https://github.com/cli/gh-webhook): `gh extension install cli/gh-webhook`
 - [tmux](https://github.com/tmux/tmux)
-- [Claude Code](https://claude.ai/claude-code) CLI
+- One of: [Claude Code](https://claude.ai/claude-code) CLI, or [Codex](https://developers.openai.com/codex/cli) CLI
 
 ## Quick install
 
@@ -31,7 +31,7 @@ The minimal flow above leaves out auth setup and a few server-specific gotchas. 
 ### 1. System prerequisites
 
 ```bash
-# Install node 22+, tmux, gh, claude code via your usual route, then:
+# Install node 22+, tmux, gh, and your chosen agent CLI (claude or codex) via your usual route, then:
 gh extension install cli/gh-webhook
 ```
 
@@ -44,13 +44,13 @@ Generate one on your GitHub host's web UI: Settings → Developer settings → P
 **Classic PAT scopes:**
 - `repo` — issue read/write, label updates, PR creation, code access (no smaller scope works for private repo issues)
 - `admin:repo_hook` — needed for `gh webhook forward` to register and clean up its temporary `cli` webhook
-- `workflow` — only if Claude might modify `.github/workflows/*` files
+- `workflow` — only if the agent might modify `.github/workflows/*` files
 
 **Fine-grained PAT** (GHES 3.10+):
 - Repository access: select the repos
 - Permissions: Issues R/W, Pull requests R/W, Contents R/W, Webhooks R/W, Metadata R, Workflows R/W (last one optional)
 
-The daemon's own needs are smaller (Issues R/W + Webhooks R/W + Metadata R), but Claude inherits the same env when it runs inside tmux, so the token has to cover both — see [Token inheritance](#token-inheritance) below.
+The daemon's own needs are smaller (Issues R/W + Webhooks R/W + Metadata R), but the agent inherits the same env when it runs inside tmux, so the token has to cover both — see [Token inheritance](#token-inheritance) below.
 
 ### 3. Install the package
 
@@ -112,7 +112,7 @@ Healthy logs include `Starting webhook forwarder for <repo>` and no immediate er
 
 | Command | What it does |
 | --- | --- |
-| `april init` | Copies the bundled `config.example.yaml` to `~/.config/april/config.yaml` and the `issue-worker` skill to `~/.claude/skills/`. **Only writes files that don't already exist** — never overwrites. |
+| `april init` | Copies the bundled `config.example.yaml` to `~/.config/april/config.yaml` and the `issue-worker` skill to the configured agent's skill dir (`~/.claude/skills/` for claude, `~/.agents/skills/` for codex). **Only writes files that don't already exist** — never overwrites. |
 | `april install` | Installs and starts the user service. Pass `--print` to see the unit/plist without writing it. |
 | `april install-skill [-y]` | Install or refresh the issue-worker skill. Prompts before overwriting an existing copy; `--yes` skips the prompt (use in non-interactive scripts). |
 | `april upgrade [VER]` | Upgrade the npm package, regenerate the unit, restart the service, and reconcile the skill. |
@@ -142,7 +142,33 @@ After editing:
 
 ### Token inheritance
 
-`spawner.ts` runs Claude inside tmux with `tmux new-session -d <claudeCommand>` — no login shell. So Claude inherits the daemon's env directly, including any `GH_TOKEN` / `GH_ENTERPRISE_TOKEN` you set in the env file. Practical implication: the PAT you provide has to cover what *both* april and Claude need, not just april. If you want Claude to fall back to your shell's auth (a credential helper, network-level auth, etc.), you'd need to wrap the tmux command in a login shell — not currently supported.
+`spawner.ts` runs the agent inside tmux with `tmux new-session -d <agentCommand>` — no login shell. So the agent inherits the daemon's env directly, including any `GH_TOKEN` / `GH_ENTERPRISE_TOKEN` you set in the env file. Practical implication: the PAT you provide has to cover what *both* april and the agent need, not just april. If you want the agent to fall back to your shell's auth (a credential helper, network-level auth, etc.), you'd need to wrap the tmux command in a login shell — not currently supported.
+
+## Choosing an agent
+
+`llm` selects which CLI april spawns. `skill` is an april-level setting; CLI-specific options live under their own blocks:
+
+```yaml
+llm: "claude"               # or "codex"
+skill: "issue-worker"
+
+claude:
+  # model: "opus"           # defaults to opus
+  # permissionMode: "auto"  # defaults to auto
+
+codex:
+  # model: "gpt-5.1-codex-max" # omit to use codex's configured default
+  # askForApproval: "never"    # defaults to never
+```
+
+| | claude | codex |
+|---|---|---|
+| Launch | `claude --model <model> --permission-mode <permissionMode>` | `codex --model <model> --ask-for-approval <askForApproval>` |
+| Prompt sigil | `/issue-worker …` | `$issue-worker …` |
+| Skill install dir | `~/.claude/skills/` | `~/.agents/skills/` |
+| Default approval behavior | `permissionMode: "auto"` | `askForApproval: "never"` |
+
+The bundled `issue-worker` skill is the same SKILL.md for both; april just installs it under the right tree based on `llm`. Switching agents later: edit `config.yaml`, then run `april install-skill && april restart`.
 
 ## Service backend
 
@@ -151,7 +177,7 @@ After editing:
 
 ### Restarts and tmux sessions
 
-The unit/plist sets `KillMode=process` (systemd) / `AbandonProcessGroup=true` (launchd), which means `april restart` only signals the daemon itself — tmux sessions and the Claude processes inside them keep running. The daemon's shutdown handler explicitly terminates the `gh webhook forward` children before exiting.
+The unit/plist sets `KillMode=process` (systemd) / `AbandonProcessGroup=true` (launchd), which means `april restart` only signals the daemon itself — tmux sessions and the agent processes inside them keep running. The daemon's shutdown handler explicitly terminates the `gh webhook forward` children before exiting.
 
 If the daemon ever has to be SIGKILLed (it hung past the systemd stop timeout), the forwarders will be orphaned to PID 1. Clean them up with `pkill -f 'gh webhook forward'`.
 
@@ -241,7 +267,7 @@ april restart
 
 Means your auth is provided by something other than a stored token (credential helper, network auth, wrapper). The webhook extension still needs an actual token — it doesn't matter how `gh` does its other API calls. Add `GH_TOKEN` / `GH_ENTERPRISE_TOKEN` to the env file.
 
-### Service can't find `gh` / `tmux` / `claude` even though they're on your shell PATH
+### Service can't find `gh` / `tmux` / `claude` / `codex` even though they're on your shell PATH
 
 `april install` captures `$PATH` at install time and bakes it into the unit. If you installed any of those tools after running `april install`, re-run `april install` to recapture PATH.
 
@@ -251,8 +277,8 @@ Once installed, label a GitHub issue with `agent:todo` and assign it to yourself
 
 1. Create a git worktree for the issue
 2. Run any configured post-worktree hooks (e.g. `pnpm i`)
-3. Spawn a tmux session with Claude Code
-4. Claude reads the issue, implements a fix, and opens a PR
+3. Spawn a tmux session with the configured agent (claude or codex)
+4. The agent reads the issue, implements a fix, and opens a PR
 5. Issue labels transition: `agent:todo` → `agent:wip` → `agent:review`
 
 Attach to a running session anytime with `tmux attach -t <session-name>`.

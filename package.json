@@ -1,7 +1,7 @@
 {
   "name": "@armstrongnate/april",
   "version": "0.0.8",
-  "description": "She does all the work so you don't have to. Watches GitHub issues and spawns Claude Code sessions to work them.",
+  "description": "She does all the work so you don't have to. Watches GitHub issues and spawns coding-agent sessions (Claude Code or Codex) to work them.",
   "type": "module",
   "bin": {
     "april": "./dist/cli.js"

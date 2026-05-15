@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
-import { SKILL_DST, bundledSkillPath, compareSkill } from "../skill.js";
+import { skillDestPath, bundledSkillPath, compareSkill } from "../skill.js";
 
 export async function run(args: string[]): Promise<number> {
   const yes = args.includes("--yes") || args.includes("-y");
@@ -13,26 +13,27 @@ export async function run(args: string[]): Promise<number> {
     return 1;
   }
 
+  const dst = skillDestPath();
   const state = compareSkill();
 
   if (state === "matches-bundled") {
-    console.log(`✓ Skill at ${SKILL_DST} is already up to date`);
+    console.log(`✓ Skill at ${dst} is already up to date`);
     return 0;
   }
 
   if (state === "missing") {
-    mkdirSync(dirname(SKILL_DST), { recursive: true });
-    copyFileSync(src, SKILL_DST);
-    console.log(`✓ Installed skill at ${SKILL_DST}`);
+    mkdirSync(dirname(dst), { recursive: true });
+    copyFileSync(src, dst);
+    console.log(`✓ Installed skill at ${dst}`);
     return 0;
   }
 
   // differs-from-bundled
   console.log("Bundled issue-worker skill differs from the installed copy.");
-  console.log(`  installed: ${SKILL_DST}`);
+  console.log(`  installed: ${dst}`);
   console.log(`  bundled:   ${src}`);
   console.log("");
-  console.log(`Diff with: diff ${SKILL_DST} ${src}`);
+  console.log(`Diff with: diff ${dst} ${src}`);
   console.log("");
 
   if (!yes) {
@@ -56,7 +57,7 @@ export async function run(args: string[]): Promise<number> {
     }
   }
 
-  copyFileSync(src, SKILL_DST);
-  console.log(`✓ Overwrote skill at ${SKILL_DST}`);
+  copyFileSync(src, dst);
+  console.log(`✓ Overwrote skill at ${dst}`);
   return 0;
 }

@@ -7,12 +7,25 @@ export interface RepoConfig {
   postWorktreeHook?: string; // shell command to run after worktree creation (cwd = worktree)
 }
 
+export type AgentKind = "claude" | "codex";
+
+export interface ClaudeConfig {
+  model?: string;
+  permissionMode?: string;
+}
+
+export interface CodexConfig {
+  model?: string;
+  askForApproval?: string;
+}
+
 export interface Config {
   assignee: string;
   label: string;
-  claudeSkill: string;
-  claudeModel?: string;
-  claudePermissionMode?: string;
+  llm: AgentKind;
+  skill: string;
+  claude?: ClaudeConfig;
+  codex?: CodexConfig;
   port: number;
   repos: RepoConfig[];
 }

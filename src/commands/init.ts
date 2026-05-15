@@ -4,7 +4,7 @@ import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { ensureEnvFile, envFilePath } from "../service/envfile.js";
 import { isGhWebhookExtensionInstalled, GH_EXTENSION_INSTALL_CMD } from "../precheck.js";
-import { SKILL_DST, bundledSkillPath, compareSkill } from "../skill.js";
+import { skillDestPath, bundledSkillPath, compareSkill } from "../skill.js";
 
 // Resolve the bundled package root from this file's installed location.
 // dist/commands/init.js -> dist/.. (the package root, where config.example.yaml lives)
@@ -43,7 +43,11 @@ export function run(_args: string[]): number {
     console.error(`  Cannot find bundled skill at ${skillSrc}`);
     return 1;
   }
-  copyIfMissing(skillSrc, SKILL_DST, "skill");
+  // Skill install path depends on the configured LLM. Before init writes
+  // a config, configuredLlmKind() falls back to claude, which matches the
+  // bundled example. If the user switches the agent later, they re-run
+  // `april install-skill`.
+  copyIfMissing(skillSrc, skillDestPath(), "skill");
 
   const envState = ensureEnvFile();
   console.log(

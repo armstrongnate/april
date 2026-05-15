@@ -75,7 +75,7 @@ ${envEntries}
     <string>Background</string>
     <!-- launchd's equivalent of systemd's KillMode=process: when the daemon
          exits, don't kill children that share its process group. Keeps tmux
-         sessions and any in-flight Claude work alive across restarts. -->
+         sessions and any in-flight agent work alive across restarts. -->
     <key>AbandonProcessGroup</key>
     <true/>
 </dict>
