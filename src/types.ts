@@ -35,7 +35,6 @@ export interface IssueInfo {
   title: string;
 }
 
-export interface WebhookResult {
-  repo: RepoConfig;
-  issue: IssueInfo;
-}
+export type WebhookResult =
+  | { kind: "issue_assigned"; repo: RepoConfig; issue: IssueInfo }
+  | { kind: "pr_closed"; repo: RepoConfig; branch: string; prNumber: number };

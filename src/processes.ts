@@ -64,7 +64,7 @@ function spawnForwarder(config: Config, repoKey: string, url: string): Forwarder
     const child = spawn("gh", [
       "webhook", "forward",
       `--repo=${repoKey}`,
-      "--events=issues",
+      "--events=issues,pull_request",
       `--url=${url}`,
     ], {
       stdio: ["ignore", "pipe", "pipe"],

@@ -1,12 +1,13 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { createLogger } from "./logger.js";
 import { parseWebhookEvent } from "./webhook.js";
-import { isIssueActive } from "./spawner.js";
+import { isIssueActive, handlePrClosed } from "./spawner.js";
 import type { Config, WebhookResult } from "./types.js";
 
 const log = createLogger("server");
 
-type OnNewIssue = (result: WebhookResult) => Promise<void>;
+type IssueAssignedResult = Extract<WebhookResult, { kind: "issue_assigned" }>;
+type OnNewIssue = (result: IssueAssignedResult) => Promise<void>;
 
 export async function startServer(
   config: Config,
@@ -43,8 +44,8 @@ export async function startServer(
 
       const result = parseWebhookEvent(headers, body, config);
 
-      if (result) {
-        const key = `${result.repo.owner}/${result.repo.name}#${result.issue.number}`;
+      if (result?.kind === "issue_assigned") {
+        const key = `issue:${result.repo.owner}/${result.repo.name}#${result.issue.number}`;
 
         if (isIssueActive(result.repo, result.issue.number)) {
           log.debug(`Issue ${key} already active, ignoring webhook`);
@@ -56,6 +57,20 @@ export async function startServer(
           onNewIssue(result).catch((err) => {
             log.error(`Error handling new issue: ${err instanceof Error ? err.message : String(err)}`);
           });
+        }
+      } else if (result?.kind === "pr_closed") {
+        const key = `pr:${result.repo.owner}/${result.repo.name}#${result.prNumber}`;
+
+        if (isRecentlyProcessed(key)) {
+          log.debug(`PR close ${key} recently processed, debouncing`);
+        } else {
+          markProcessed(key);
+          log.info(`Processing webhook for ${key}`);
+          try {
+            handlePrClosed(result.repo, result.branch);
+          } catch (err) {
+            log.error(`Error handling PR close: ${err instanceof Error ? err.message : String(err)}`);
+          }
         }
       }
     } catch (err) {

@@ -252,6 +252,30 @@ export async function handleNewIssue(
   log.info(`Issue #${issue.number} (${repo.owner}/${repo.name}) is now active`);
 }
 
+export function handlePrClosed(repo: RepoConfig, branch: string): void {
+  log.info(`Cleaning up worktree for branch ${branch} (${repo.owner}/${repo.name})`);
+
+  try {
+    execFileSync("wt", ["remove", branch, "-f", "-D"], {
+      cwd: repo.path,
+      timeout: 60_000,
+      stdio: "pipe",
+    });
+    log.info(`Removed worktree ${branch}`);
+  } catch (err) {
+    log.warn(`wt remove ${branch} failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  try {
+    execFileSync("tmux", ["kill-session", "-t", branch], { stdio: "pipe" });
+    log.info(`Killed tmux session ${branch}`);
+  } catch {
+    // Session already gone — fine
+  }
+
+  log.info(`Cleanup complete for ${branch}`);
+}
+
 export function fetchOpenIssues(repo: RepoConfig, config: Config): IssueInfo[] {
   try {
     const output = execFileSync("gh", [
