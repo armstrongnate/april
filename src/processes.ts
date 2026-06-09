@@ -58,6 +58,13 @@ function spawnForwarder(config: Config, repoKey: string, url: string): Forwarder
   function start(): void {
     if (state.stopped) return;
 
+    // Clear any hook left behind by a previous attempt. `gh webhook forward`
+    // can create the `cli` hook and then die before/while opening its receiving
+    // websocket (e.g. a transient relay 500), leaving an orphan that makes every
+    // restart fail with HTTP 422 "Hook already exists". Cleaning up before each
+    // (re)start guarantees a clean slate instead of a permanent restart loop.
+    cleanupStaleWebhooks(repoKey);
+
     state.lastStartTime = Date.now();
     log.info(`Starting webhook forwarder for ${repoKey}`);
 
@@ -118,7 +125,6 @@ export function startWebhookForwarders(config: Config): ChildProcess[] {
 
   for (const repo of config.repos) {
     const repoKey = `${repo.owner}/${repo.name}`;
-    cleanupStaleWebhooks(repoKey);
     const state = spawnForwarder(config, repoKey, url);
     forwarders.push(state);
   }
