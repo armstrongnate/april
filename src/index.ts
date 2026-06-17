@@ -63,7 +63,7 @@ async function main(): Promise<void> {
     const openIssues = fetchOpenIssues(repo, config);
 
     for (const issue of openIssues) {
-      if (!isIssueActive(repo, issue.number)) {
+      if (!(await isIssueActive(repo, issue.number, config))) {
         log.info(`Found missed issue: #${issue.number} — "${issue.title}"`);
         await handleNewIssue(repo, issue, config);
       }
@@ -88,13 +88,14 @@ async function main(): Promise<void> {
   const children: ChildProcess[] = startWebhookForwarders(config);
 
   // Print startup banner
-  const { worktrees, sessions } = getActiveCounts(config);
+  const { worktrees, sessions } = await getActiveCounts(config);
   const repoList = config.repos.map((r) => `${r.owner}/${r.name}`).join(", ");
 
   console.log(`  Assignee: ${config.assignee}`);
   console.log(`  Label: ${config.label}`);
   console.log(`  Repos: ${repoList}`);
-  console.log(`  Active: ${worktrees} worktree${worktrees === 1 ? "" : "s"}, ${sessions} tmux session${sessions === 1 ? "" : "s"}`);
+  console.log(`  Session manager: ${config.sessionManager ?? "tmux"}`);
+  console.log(`  Active: ${worktrees} worktree${worktrees === 1 ? "" : "s"}, ${sessions} session${sessions === 1 ? "" : "s"}`);
   console.log(`  Server: http://localhost:${config.port}`);
   console.log(`  Forwarders: ${children.length} active`);
   console.log("");

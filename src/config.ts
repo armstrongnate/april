@@ -6,7 +6,7 @@ import { parse as parseYaml } from "yaml";
 import { createLogger } from "./logger.js";
 import { isGhWebhookExtensionInstalled, GH_EXTENSION_INSTALL_CMD } from "./precheck.js";
 import { AGENT_KINDS, getAgent } from "./agents.js";
-import type { AgentKind, ClaudeConfig, CodexConfig, Config, RepoConfig } from "./types.js";
+import type { AgentKind, ClaudeConfig, CodexConfig, Config, RepoConfig, SessionManagerKind } from "./types.js";
 
 const log = createLogger("config");
 
@@ -38,8 +38,8 @@ function findConfigPath(): string {
   );
 }
 
-function validateTools(agentCli: string): void {
-  const tools = ["gh", "tmux", "git", agentCli];
+function validateTools(agentCli: string, sessionManager: SessionManagerKind): void {
+  const tools = ["gh", "git", agentCli, sessionManager === "herdr" ? "herdr" : "tmux"];
   for (const tool of tools) {
     try {
       execSync(`which ${tool}`, { stdio: "pipe" });
@@ -88,6 +88,15 @@ function parseLlm(parsed: Record<string, unknown>): AgentKind {
   return llmRaw as AgentKind;
 }
 
+function parseSessionManager(parsed: Record<string, unknown>): SessionManagerKind {
+  const val = parsed.sessionManager;
+  if (val === undefined || val === null) return "tmux";
+  if (val !== "tmux" && val !== "herdr") {
+    throw new Error(`config: "sessionManager" must be "tmux" or "herdr" when provided`);
+  }
+  return val;
+}
+
 function parseClaudeConfig(parsed: Record<string, unknown>): ClaudeConfig | undefined {
   const raw = optionalObject(parsed, "claude", "config");
   if (!raw) return undefined;
@@ -118,6 +127,7 @@ export function parseConfigFile(path: string): Config {
   const label = validateString(parsed, "label", "config");
   const root = parsed as Record<string, unknown>;
   const llm = parseLlm(root);
+  const sessionManager = parseSessionManager(root);
   const skill = validateString(root, "skill", "config");
   const claude = parseClaudeConfig(root);
   const codex = parseCodexConfig(root);
@@ -163,7 +173,7 @@ export function parseConfigFile(path: string): Config {
     return { owner, name, path: resolvedPath, defaultBranch, slackChannel, postWorktreeHook };
   });
 
-  const config: Config = { assignee, label, llm, skill, claude, codex, port, repos };
+  const config: Config = { assignee, label, llm, sessionManager, skill, claude, codex, port, repos };
 
   return config;
 }
@@ -194,7 +204,7 @@ export function loadConfig(): Config {
 
   const config = parseConfigFile(configPath);
 
-  validateTools(getAgent(config.llm).cli);
+  validateTools(getAgent(config.llm).cli, config.sessionManager ?? "tmux");
 
   log.info(
     `Config loaded: assignee=${config.assignee}, label=${config.label}, llm=${config.llm}, ` +

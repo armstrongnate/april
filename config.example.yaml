@@ -1,6 +1,7 @@
 assignee: "your-github-username"
 label: "agent:todo"
 llm: "claude"               # "claude" or "codex"
+sessionManager: "tmux"      # "tmux" (default) or "herdr"
 skill: "issue-worker"
 claude:
   # model: "opus"           # defaults to opus

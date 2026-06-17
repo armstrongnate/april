@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createLogger } from "./logger.js";
 import { makeSlug } from "./slug.js";
 import { getAgent } from "./agents.js";
+import { getSessionBackend } from "./session/index.js";
 import type { Config, RepoConfig, IssueInfo } from "./types.js";
 
 const log = createLogger("spawner");
@@ -26,10 +27,11 @@ function checkWorktreesIgnored(repoPath: string): void {
 }
 
 /**
- * Check if an issue is already active by looking at the filesystem and tmux.
- * Matches any worktree dir or tmux session starting with `gh-{issueNumber}-`.
+ * Check if an issue is already active by looking at the filesystem and the
+ * session backend. Matches any worktree dir or session starting with
+ * `gh-{issueNumber}-`.
  */
-export function isIssueActive(repo: RepoConfig, issueNumber: number): boolean {
+export async function isIssueActive(repo: RepoConfig, issueNumber: number, config: Config): Promise<boolean> {
   const prefix = `gh-${issueNumber}-`;
 
   // Check worktrees on disk
@@ -43,28 +45,21 @@ export function isIssueActive(repo: RepoConfig, issueNumber: number): boolean {
     }
   }
 
-  // Check tmux sessions
-  try {
-    const output = execSync("tmux list-sessions -F '#{session_name}'", {
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    const match = output.trim().split("\n").find((s) => s.startsWith(prefix));
-    if (match) {
-      log.info(`Skipping issue #${issueNumber}: existing tmux session found (${match})`);
-      return true;
-    }
-  } catch {
-    // tmux not running or no sessions
+  // Check active sessions
+  const sessions = await getSessionBackend(config).listSessions();
+  const match = sessions.find((s) => s.startsWith(prefix));
+  if (match) {
+    log.info(`Skipping issue #${issueNumber}: existing session found (${match})`);
+    return true;
   }
 
   return false;
 }
 
 /**
- * Count active worktrees and tmux sessions across all configured repos.
+ * Count active worktrees and sessions across all configured repos.
  */
-export function getActiveCounts(config: Config): { worktrees: number; sessions: number } {
+export async function getActiveCounts(config: Config): Promise<{ worktrees: number; sessions: number }> {
   let worktrees = 0;
 
   for (const repo of config.repos) {
@@ -74,16 +69,8 @@ export function getActiveCounts(config: Config): { worktrees: number; sessions: 
     }
   }
 
-  let sessions = 0;
-  try {
-    const output = execSync("tmux list-sessions -F '#{session_name}'", {
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    sessions = output.trim().split("\n").filter((s) => s.startsWith("gh-")).length;
-  } catch {
-    // tmux not running
-  }
+  const sessionNames = await getSessionBackend(config).listSessions();
+  const sessions = sessionNames.filter((s) => s.startsWith("gh-")).length;
 
   return { worktrees, sessions };
 }
@@ -157,21 +144,14 @@ export async function createWorktree(repo: RepoConfig, branch: string): Promise<
   return worktreePath;
 }
 
-export function spawnAgent(
+export async function spawnAgent(
   config: Config,
   repo: RepoConfig,
   issue: IssueInfo,
   worktreePath: string,
   sessionName: string
-): void {
-  // Check if session already exists
-  try {
-    execSync(`tmux has-session -t ${JSON.stringify(sessionName)}`, { stdio: "pipe" });
-    log.info(`tmux session "${sessionName}" already exists, skipping`);
-    return;
-  } catch {
-    // Session does not exist, proceed
-  }
+): Promise<void> {
+  const backend = getSessionBackend(config);
 
   const agent = getAgent(config.llm);
   const slackPart = repo.slackChannel ? ` Post the PR to Slack channel #${repo.slackChannel}.` : "";
@@ -180,30 +160,13 @@ export function spawnAgent(
   log.debug(`Prompt: ${prompt}`);
 
   const agentCommand = agent.buildCommand(config);
-  log.info(`Spawning tmux session "${sessionName}" with ${agent.kind}`);
-  execSync(`tmux new-session -d -s ${JSON.stringify(sessionName)} -c ${JSON.stringify(worktreePath)} ${JSON.stringify(agentCommand)}`);
+  log.info(`Spawning session "${sessionName}" with ${agent.kind}`);
 
-  // Send the prompt via send-keys after the agent starts
-  const escapedPrompt = prompt.replace(/'/g, "'\\''");
-  const session = JSON.stringify(sessionName);
-  setTimeout(() => {
-    try {
-      // Send text first, then Enter after a short delay to ensure the agent's input is ready
-      execSync(`tmux send-keys -t ${session} '${escapedPrompt}'`, { stdio: "pipe" });
-      setTimeout(() => {
-        try {
-          execSync(`tmux send-keys -t ${session} C-m`, { stdio: "pipe" });
-          log.info(`Prompt sent to tmux session "${sessionName}"`);
-        } catch (err) {
-          log.warn(`Failed to send Enter to session "${sessionName}": ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }, 1000);
-    } catch (err) {
-      log.warn(`Failed to send prompt to session "${sessionName}": ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }, 3000);
+  // The backend is responsible for the dedupe check, launching the agent in the
+  // worktree, and injecting the prompt once it's ready.
+  await backend.spawn({ name: sessionName, cwd: worktreePath, command: agentCommand, prompt });
 
-  log.info(`tmux session "${sessionName}" started`);
+  log.info(`Session "${sessionName}" started`);
 }
 
 export async function handleNewIssue(
@@ -211,8 +174,8 @@ export async function handleNewIssue(
   issue: IssueInfo,
   config: Config
 ): Promise<void> {
-  // Check if already active via filesystem/tmux
-  if (isIssueActive(repo, issue.number)) {
+  // Check if already active via filesystem/session backend
+  if (await isIssueActive(repo, issue.number, config)) {
     log.info(`Issue #${issue.number} already active in ${repo.owner}/${repo.name}, skipping`);
     return;
   }
@@ -228,9 +191,9 @@ export async function handleNewIssue(
     return;
   }
 
-  // Spawn tmux + agent
+  // Spawn session + agent
   try {
-    spawnAgent(config, repo, issue, worktreePath, slug);
+    await spawnAgent(config, repo, issue, worktreePath, slug);
   } catch (err) {
     log.error(`Failed to spawn ${config.llm} for #${issue.number}: ${err instanceof Error ? err.message : String(err)}`);
     return;
@@ -252,7 +215,7 @@ export async function handleNewIssue(
   log.info(`Issue #${issue.number} (${repo.owner}/${repo.name}) is now active`);
 }
 
-export function handlePrClosed(repo: RepoConfig, branch: string): void {
+export async function handlePrClosed(repo: RepoConfig, branch: string, config: Config): Promise<void> {
   log.info(`Cleaning up worktree for branch ${branch} (${repo.owner}/${repo.name})`);
 
   try {
@@ -266,12 +229,7 @@ export function handlePrClosed(repo: RepoConfig, branch: string): void {
     log.warn(`wt remove ${branch} failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  try {
-    execFileSync("tmux", ["kill-session", "-t", branch], { stdio: "pipe" });
-    log.info(`Killed tmux session ${branch}`);
-  } catch {
-    // Session already gone — fine
-  }
+  await getSessionBackend(config).kill(branch);
 
   log.info(`Cleanup complete for ${branch}`);
 }

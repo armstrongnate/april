@@ -9,6 +9,8 @@ export interface RepoConfig {
 
 export type AgentKind = "claude" | "codex";
 
+export type SessionManagerKind = "tmux" | "herdr";
+
 export interface ClaudeConfig {
   model?: string;
   permissionMode?: string;
@@ -23,6 +25,7 @@ export interface Config {
   assignee: string;
   label: string;
   llm: AgentKind;
+  sessionManager?: SessionManagerKind; // defaults to "tmux"
   skill: string;
   claude?: ClaudeConfig;
   codex?: CodexConfig;

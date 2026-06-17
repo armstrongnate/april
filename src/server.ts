@@ -47,7 +47,7 @@ export async function startServer(
       if (result?.kind === "issue_assigned") {
         const key = `issue:${result.repo.owner}/${result.repo.name}#${result.issue.number}`;
 
-        if (isIssueActive(result.repo, result.issue.number)) {
+        if (await isIssueActive(result.repo, result.issue.number, config)) {
           log.debug(`Issue ${key} already active, ignoring webhook`);
         } else if (isRecentlyProcessed(key)) {
           log.debug(`Issue ${key} recently processed, debouncing`);
@@ -67,7 +67,7 @@ export async function startServer(
           markProcessed(key);
           log.info(`Processing webhook for ${key}`);
           try {
-            handlePrClosed(result.repo, result.branch);
+            await handlePrClosed(result.repo, result.branch, config);
           } catch (err) {
             log.error(`Error handling PR close: ${err instanceof Error ? err.message : String(err)}`);
           }

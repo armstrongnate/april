@@ -22,7 +22,8 @@ function runSystemctl(args: string[]): { status: number; stdout: string; stderr:
 export function unitContents(): string {
   const node = nodeBinaryPath();
   const entry = daemonEntryPath();
-  // Capture caller's PATH so child has access to gh, tmux, git, and the configured agent CLI.
+  // Capture caller's PATH so child has access to gh, the session manager
+  // (tmux/herdr), git, and the configured agent CLI.
   const path = process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin";
 
   return `[Unit]
@@ -40,7 +41,7 @@ Environment=NODE_ENV=production
 EnvironmentFile=-${envFilePath()}
 StandardOutput=journal
 StandardError=journal
-# Only signal the main process on stop; leave tmux sessions and any other
+# Only signal the main process on stop; leave agent sessions and any other
 # children running so an april restart doesn't trash in-flight agent work.
 # The daemon's own shutdown handler still SIGTERMs the gh webhook forwarders.
 KillMode=process

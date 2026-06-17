@@ -9,7 +9,7 @@ april watches for GitHub issues assigned to you with a specific label, then spin
 - [Node.js](https://nodejs.org/) >= 22
 - [gh](https://cli.github.com/) (authenticated)
 - The [`gh-webhook` extension](https://github.com/cli/gh-webhook): `gh extension install cli/gh-webhook`
-- [tmux](https://github.com/tmux/tmux)
+- A session manager: [tmux](https://github.com/tmux/tmux) (default), or [herdr](https://herdr.dev) if you set `sessionManager: herdr` in config
 - One of: [Claude Code](https://claude.ai/claude-code) CLI, or [Codex](https://developers.openai.com/codex/cli) CLI
 
 ## Quick install
