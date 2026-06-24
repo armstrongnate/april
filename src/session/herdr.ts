@@ -24,6 +24,18 @@ const log = createLogger("session:herdr");
  *     newline instead of submitting. The pause lets the paste close. (Same
  *     reason april's tmux path waits between `send-keys <text>` and C-m.)
  *   - agent-pane content shows under pane.read source "visible", not "recent".
+ *
+ * Hardening (see injectPrompt): rather than fire-and-hope, we read the pane back
+ * and use herdr's own agent_status to verify each step, because two misfires
+ * recur in practice:
+ *   1. Empty input box. A Claude startup screen (new-model / "what's new"
+ *      notice, trust prompt) is up when we type, so the send_text burst is
+ *      swallowed and the prompt never lands. We detect this by reading the pane
+ *      back; if our text isn't there, an Enter dismisses the screen and we
+ *      retype.
+ *   2. Prompt typed but never sent. The submitting Enter is absorbed into the
+ *      paste burst as a literal newline. We detect this via agent_status (it
+ *      stays `idle`) and resend Enter without retyping.
  */
 type AgentStatus = "working" | "blocked" | "done" | "idle" | "unknown";
 
@@ -85,11 +97,48 @@ async function waitForAgentReady(paneId: string, attempts = 10, intervalMs = 100
 }
 
 const SUBMIT_SETTLE_MS = 1000;
+const INJECT_ATTEMPTS = 4;
 
 /** Read a pane's current agent status (undefined if unavailable). */
 async function paneStatus(paneId: string): Promise<AgentStatus | undefined> {
   const res = await herdrRequest<{ pane?: { agent_status?: AgentStatus } }>("pane.get", { pane_id: paneId });
   return res.pane?.agent_status;
+}
+
+/** A status that means the agent left the input box and picked up the prompt. */
+function isAccepted(status: AgentStatus | undefined): boolean {
+  return status !== undefined && status !== "idle" && status !== "unknown";
+}
+
+const normalizeWhitespace = (text: string): string => text.replace(/\s+/g, " ");
+
+/**
+ * A short, wrap-safe slice of the prompt to look for in the pane's input box.
+ * Kept brief (and whitespace-normalized) so terminal wrapping or the `❯ `
+ * prefix don't break the substring match against what pane.read returns.
+ */
+function promptSignature(prompt: string): string {
+  return normalizeWhitespace(prompt).trim().slice(0, 24);
+}
+
+/** Visible (on-screen) text of a pane; "" if it can't be read. */
+async function readVisible(paneId: string): Promise<string> {
+  try {
+    const res = await herdrRequest<{ read?: { text?: string } }>("pane.read", {
+      pane_id: paneId,
+      source: "visible",
+    });
+    return res.read?.text ?? "";
+  } catch {
+    // transient; treat as "can't confirm"
+    return "";
+  }
+}
+
+/** Whether our prompt text currently appears in the pane (i.e. the input box). */
+async function promptIsVisible(paneId: string, signature: string): Promise<boolean> {
+  if (!signature) return true;
+  return normalizeWhitespace(await readVisible(paneId)).includes(signature);
 }
 
 /**
@@ -100,8 +149,7 @@ async function paneStatus(paneId: string): Promise<AgentStatus | undefined> {
 async function confirmSubmitted(paneId: string, attempts = 6, intervalMs = 500): Promise<boolean> {
   for (let i = 0; i < attempts; i++) {
     try {
-      const status = await paneStatus(paneId);
-      if (status && status !== "idle" && status !== "unknown") return true;
+      if (isAccepted(await paneStatus(paneId))) return true;
     } catch {
       // transient; keep polling
     }
@@ -110,21 +158,56 @@ async function confirmSubmitted(paneId: string, attempts = 6, intervalMs = 500):
   return false;
 }
 
-async function submit(paneId: string, text: string): Promise<void> {
-  // send_text writes the raw text; send_keys ["Enter"] submits it as a real
-  // key event. The settle delay between them is load-bearing — see the header
-  // note: without it the Enter is swallowed by Claude's paste burst and the
-  // prompt just sits in the input box (mirrors april's tmux text-then-C-m wait).
-  await herdrRequest("pane.send_text", { pane_id: paneId, text });
-  await delay(SUBMIT_SETTLE_MS);
-  await herdrRequest("pane.send_keys", { pane_id: paneId, keys: ["Enter"] });
+/**
+ * Inject the prompt and verify the agent actually picked it up, retrying around
+ * the two misfires documented in the header. Returns the agent status when we
+ * stop so the caller can log the outcome.
+ *
+ * The loop is self-correcting: each pass first checks whether the agent is
+ * already working (a prior Enter landed even if its confirm timed out — never
+ * retype into a running agent), then ensures the text is in the box (typing it
+ * only if absent, so retries can't duplicate it), then submits and confirms.
+ */
+async function injectPrompt(paneId: string, prompt: string): Promise<AgentStatus | undefined> {
+  const signature = promptSignature(prompt);
 
-  // Confirm via herdr's own agent_status that the prompt was accepted. If the
-  // agent is still idle, the Enter didn't take — resend it once. Resending
-  // Enter on an already-submitted (empty) input box is a harmless no-op.
-  if (await confirmSubmitted(paneId)) return;
-  log.warn(`Agent in pane ${paneId} still idle after submit; resending Enter`);
-  await herdrRequest("pane.send_keys", { pane_id: paneId, keys: ["Enter"] });
+  for (let attempt = 1; attempt <= INJECT_ATTEMPTS; attempt++) {
+    const status = await paneStatus(paneId).catch(() => undefined);
+    if (isAccepted(status)) {
+      if (attempt > 1) log.info(`Agent in pane ${paneId} accepted the prompt (status: ${status})`);
+      return status;
+    }
+
+    // 1. Ensure our text is in the input box — type it only if it isn't there,
+    //    so a retry after a failed submit doesn't append a second copy.
+    if (!(await promptIsVisible(paneId, signature))) {
+      await herdrRequest("pane.send_text", { pane_id: paneId, text: prompt });
+      await delay(SUBMIT_SETTLE_MS);
+    }
+
+    // 2. Still not there → a Claude startup screen ate the burst. Dismiss it
+    //    with Enter and loop to retype. (That Enter may instead have submitted
+    //    real text on a flaky read, so re-check status before retrying.)
+    if (!(await promptIsVisible(paneId, signature))) {
+      log.warn(`Prompt text not visible in pane ${paneId} input (attempt ${attempt}/${INJECT_ATTEMPTS}); dismissing startup screen and retrying`);
+      await herdrRequest("pane.send_keys", { pane_id: paneId, keys: ["Enter"] });
+      await delay(SUBMIT_SETTLE_MS);
+      const dismissed = await paneStatus(paneId).catch(() => undefined);
+      if (isAccepted(dismissed)) return dismissed;
+      continue;
+    }
+
+    // 3. Text is in the box — submit it and confirm via agent_status.
+    await herdrRequest("pane.send_keys", { pane_id: paneId, keys: ["Enter"] });
+    if (await confirmSubmitted(paneId)) {
+      const accepted = await paneStatus(paneId).catch(() => undefined);
+      log.info(`Prompt submitted to pane ${paneId} on attempt ${attempt} (status: ${accepted ?? "unknown"})`);
+      return accepted;
+    }
+    log.warn(`Agent in pane ${paneId} still idle after Enter (attempt ${attempt}/${INJECT_ATTEMPTS}); will retry`);
+  }
+
+  return paneStatus(paneId).catch(() => undefined);
 }
 
 export const herdrBackend: SessionBackend = {
@@ -184,10 +267,16 @@ export const herdrBackend: SessionBackend = {
     }
     log.info(`Started agent in herdr workspace "${name}" (pane ${paneId})`);
 
-    // Wait until the agent is up, then inject the prompt.
+    // Wait until the agent is up, then inject the prompt and verify it landed.
     await waitForAgentReady(paneId);
-    await submit(paneId, prompt);
-    log.info(`Prompt sent to herdr workspace "${name}"`);
+    const status = await injectPrompt(paneId, prompt);
+    if (isAccepted(status)) {
+      log.info(`Prompt delivered to herdr workspace "${name}" — agent is ${status} (pane ${paneId})`);
+    } else {
+      log.error(
+        `Prompt may NOT have been accepted in herdr workspace "${name}" — agent status "${status ?? "unavailable"}" after ${INJECT_ATTEMPTS} attempts (pane ${paneId}). The session likely needs manual attention.`
+      );
+    }
   },
 
   async kill(name: string): Promise<void> {
