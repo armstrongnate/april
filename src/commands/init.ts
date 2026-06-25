@@ -4,7 +4,7 @@ import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { ensureEnvFile, envFilePath } from "../service/envfile.js";
 import { isGhWebhookExtensionInstalled, GH_EXTENSION_INSTALL_CMD } from "../precheck.js";
-import { skillDestPath, bundledSkillPath, compareSkill } from "../skill.js";
+import { skillDestPath, bundledSkillPath, compareSkill, ALL_BUNDLED_SKILLS } from "../skill.js";
 
 // Resolve the bundled package root from this file's installed location.
 // dist/commands/init.js -> dist/.. (the package root, where config.example.yaml lives)
@@ -38,16 +38,18 @@ export function run(_args: string[]): number {
   }
   const configResult = copyIfMissing(configSrc, configDst, "config");
 
-  const skillSrc = bundledSkillPath();
-  if (!existsSync(skillSrc)) {
-    console.error(`  Cannot find bundled skill at ${skillSrc}`);
-    return 1;
-  }
-  // Skill install path depends on the configured LLM. Before init writes
+  // Skill install paths depend on the configured LLM. Before init writes
   // a config, configuredLlmKind() falls back to claude, which matches the
   // bundled example. If the user switches the agent later, they re-run
   // `april install-skill`.
-  copyIfMissing(skillSrc, skillDestPath(), "skill");
+  for (const skill of ALL_BUNDLED_SKILLS) {
+    const skillSrc = bundledSkillPath(skill);
+    if (!existsSync(skillSrc)) {
+      console.error(`  Cannot find bundled skill at ${skillSrc}`);
+      return 1;
+    }
+    copyIfMissing(skillSrc, skillDestPath(skill), `skill ${skill}`);
+  }
 
   const envState = ensureEnvFile();
   console.log(
@@ -64,10 +66,10 @@ export function run(_args: string[]): number {
     console.log("    (april will refuse to start without it.)");
   }
 
-  // If the installed skill differs from what we shipped, surface it without prompting.
-  if (compareSkill() === "differs-from-bundled") {
+  // If any installed skill differs from what we shipped, surface it without prompting.
+  if (ALL_BUNDLED_SKILLS.some((s) => compareSkill(s) === "differs-from-bundled")) {
     console.log("");
-    console.log(`  i  installed skill differs from bundled. Refresh with: april install-skill`);
+    console.log(`  i  an installed skill differs from bundled. Refresh with: april install-skill`);
   }
 
   console.log("");

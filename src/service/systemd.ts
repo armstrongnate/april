@@ -59,7 +59,7 @@ function ensureSystemctlPresent(): void {
   }
 }
 
-function lingerEnabled(): boolean {
+export function lingerEnabled(): boolean {
   try {
     const out = execFileSync("loginctl", ["show-user", process.env.USER ?? ""], {
       encoding: "utf-8",

@@ -110,17 +110,53 @@ Healthy logs include `Starting webhook forwarder for <repo>` and no immediate er
 
 ## Commands
 
+### Setup & service
+
 | Command | What it does |
 | --- | --- |
-| `april init` | Copies the bundled `config.example.yaml` to `~/.config/april/config.yaml` and the `issue-worker` skill to the configured agent's skill dir (`~/.claude/skills/` for claude, `~/.agents/skills/` for codex). **Only writes files that don't already exist** — never overwrites. |
+| `april init` | Copies the bundled `config.example.yaml` to `~/.config/april/config.yaml` and the bundled skills (`issue-worker`, `issue-investigator`) to the configured agent's skill dir (`~/.claude/skills/` for claude, `~/.agents/skills/` for codex). **Only writes files that don't already exist** — never overwrites. |
 | `april install` | Installs and starts the user service. Pass `--print` to see the unit/plist without writing it. |
-| `april install-skill [-y]` | Install or refresh the issue-worker skill. Prompts before overwriting an existing copy; `--yes` skips the prompt (use in non-interactive scripts). |
-| `april upgrade [VER]` | Upgrade the npm package, regenerate the unit, restart the service, and reconcile the skill. |
+| `april install-skill [-y]` | Install or refresh the bundled skills. Prompts before overwriting a changed copy; `--yes` skips the prompt (use in non-interactive scripts). |
+| `april upgrade [VER]` | Upgrade the npm package, regenerate the unit, restart the service, and reconcile the skills. |
 | `april uninstall` | Stops and removes the service. |
 | `april start` / `stop` / `restart` | Lifecycle. |
 | `april status` | Shows service status. |
 | `april logs -f [-n N]` | Streams logs. `-n` sets line count (default 100). |
 | `april daemon` | Runs the worker in the foreground (for debugging; the service uses `dist/index.js` directly). |
+
+### Runtime & work
+
+These run **in-process** against the filesystem, the session backend, and `gh` — so they work whether or not the daemon is running. State is derived from `.worktrees/gh-*` dirs and live sessions, not from daemon memory.
+
+| Command | What it does |
+| --- | --- |
+| `april ps [--json]` | Lists active work — issues in flight and `inv-` investigations — with session liveness and the owning repo. Shows a daemon-liveness line (uptime, forwarders) when the daemon's `/status` endpoint is reachable. |
+| `april config [--path\|--validate\|--json]` | Prints the resolved config and its path. `--validate` exits non-zero if invalid; `--path` prints just the path; `--json` emits JSON. |
+| `april doctor` | Health checklist without starting the daemon: config validity, required tools on PATH, `gh-webhook` extension, `gh` auth, repo paths, service unit, daemon reachability, and (Linux) linger. Exits non-zero on hard failures. |
+| `april run <issue> [--repo O/N]` | Manually start work on an issue (`123` or `owner/name#123`) — the same path the daemon takes on a labeled webhook, minus the label requirement. `--repo` disambiguates a bare number across repos. |
+| `april cancel <issue> [--requeue]` | Stop an issue's work: kill the session and remove the worktree, and remove the `agent:wip` label. `--requeue` re-adds `agent:todo` so the daemon picks it up again. |
+| `april kill <slug\|issue> [--worktree]` | Kill a single session by slug or issue number (handles `inv-` investigations too). `--worktree` also removes the backing worktree. |
+| `april clean [--force] [--repo O/N]` | Prune orphaned worktrees — stale (no live session) work whose issue is **closed** and has **no open PR**. Dry run unless `--force`; anything in progress or in review is kept. |
+| `april investigate "<problem>" [--repo O/N] [--auto]` | Dispatch a research agent in the current directory to investigate a problem and file a GitHub issue. See [Investigate](#investigate) below. |
+
+## Investigate
+
+`april investigate` is the front half of the loop: it turns a vague problem into a well-scoped GitHub issue, which the daemon can then pick up and implement.
+
+```bash
+april investigate "study space pull-to-refresh shows a duplicate spinner on ios"
+```
+
+It spawns a research agent (using the configured `llm` and the bundled `issue-investigator` skill) **in the current working directory** — which need not be a repo, and may be your home directory. This is deliberate: an investigation can span repos, and the owning repo isn't always known up front. The agent reads the configured repos' local checkouts and uses `gh` to research, decides where the work belongs, and files the issue there.
+
+Each investigation runs as its own session (named `inv-…`), so it shows up in `april ps` and can be torn down with `april kill <slug>`.
+
+**Modes:**
+
+- **Deferred (default).** The agent creates the issue assigned to you, *without* the trigger label, and prints the URL. You review it and label it `agent:todo` when you're ready to hand it to the daemon. This matches the usual discovery → review → handoff flow.
+- **`--auto`.** The agent also applies the trigger label, so the daemon picks the issue up and starts implementation immediately — one command goes from prompt → research → issue → PR.
+
+Use `--repo OWNER/NAME` to suggest the owning repo (the agent still decides), and `--dry-run` to print the session name and the exact prompt that would be dispatched without spawning anything.
 
 ## Environment variables
 
@@ -168,7 +204,7 @@ codex:
 | Skill install dir | `~/.claude/skills/` | `~/.agents/skills/` |
 | Default approval behavior | `permissionMode: "auto"` | `askForApproval: "never"` |
 
-The bundled `issue-worker` skill is the same SKILL.md for both; april just installs it under the right tree based on `llm`. Switching agents later: edit `config.yaml`, then run `april install-skill && april restart`.
+The bundled skills (`issue-worker`, used by the daemon; `issue-investigator`, used by `april investigate`) are the same SKILL.md for both agents; april just installs them under the right tree based on `llm`. Switching agents later: edit `config.yaml`, then run `april install-skill && april restart`.
 
 ## Service backend
 

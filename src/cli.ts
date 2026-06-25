@@ -3,32 +3,59 @@ import { backend } from "./service/index.js";
 import { run as runInit } from "./commands/init.js";
 import { run as runUpgrade } from "./commands/upgrade.js";
 import { run as runInstallSkill } from "./commands/install-skill.js";
+import { run as runConfig } from "./commands/config.js";
+import { run as runDoctor } from "./commands/doctor.js";
+import { run as runPs } from "./commands/ps.js";
+import { run as runRunIssue } from "./commands/run-issue.js";
+import { run as runCancel } from "./commands/cancel.js";
+import { run as runKill } from "./commands/kill.js";
+import { run as runClean } from "./commands/clean.js";
+import { run as runInvestigate } from "./commands/investigate.js";
 
 const HELP = `april — issue worker
 
 Usage:
   april <command> [options]
 
-Commands:
-  init              Copy bundled config, skill, and env file if missing.
+Setup:
+  init              Copy bundled config, skills, and env file if missing.
   install [--print] Install and start the user service. --print emits the unit/plist to stdout instead.
-  install-skill [-y] Install or refresh the issue-worker skill. Prompts before overwriting an existing
+  install-skill [-y] Install or refresh the bundled skills. Prompts before overwriting a changed
                     one; --yes (-y) skips the prompt.
-  upgrade [VER]     Upgrade the npm package, regenerate the unit, restart, and reconcile the skill.
+  upgrade [VER]     Upgrade the npm package, regenerate the unit, restart, and reconcile the skills.
                     VER defaults to "latest". --with npm|pnpm|yarn overrides the package manager.
   uninstall         Stop and remove the user service
+
+Service lifecycle:
   start             Start the service
   stop              Stop the service
   restart           Restart the service
   status            Show service status
   logs [-f] [-n N]  Show service logs (-f to follow, -n lines, default 100)
   daemon            Run april in the foreground (used by the service; rarely invoked directly)
+
+Runtime:
+  ps [--json]       List active work (issues in flight + investigations).
+  config [--path|--validate|--json]
+                    Print/validate the resolved config.
+  doctor            Check prereqs and health (config, tools, gh auth, repos, service, daemon).
+
+Work:
+  run <issue>       Manually start work on an issue (123 or owner/name#123). --repo to disambiguate.
+  cancel <issue>    Stop an issue's work (kill session + remove worktree). --requeue re-adds agent:todo.
+  kill <slug|issue> Kill one session (incl. investigations). --worktree also removes the worktree.
+  clean [--force]   Prune orphaned worktrees (closed issue, no open PR). Dry run unless --force.
+  investigate, inv "<problem>" [--repo O/N] [--auto]
+                    Dispatch a research agent in the current dir to investigate a problem and file
+                    a GitHub issue. Deferred (review) by default; --auto labels it for pickup.
+
+Meta:
   help              Show this help
   version           Show version
 
 Notes:
   Nothing is ever overwritten silently. To reset config, delete ~/.config/april/config.yaml
-  and re-run init. To refresh the skill, use install-skill (it prompts before overwriting).
+  and re-run init. To refresh skills, use install-skill (it prompts before overwriting).
 `;
 
 function parseLogsArgs(args: string[]): { follow: boolean; lines: number } {
@@ -86,6 +113,38 @@ async function main(): Promise<number> {
 
   if (cmd === "install-skill") {
     return await runInstallSkill(rest);
+  }
+
+  if (cmd === "config") {
+    return runConfig(rest);
+  }
+
+  if (cmd === "doctor") {
+    return await runDoctor(rest);
+  }
+
+  if (cmd === "ps") {
+    return await runPs(rest);
+  }
+
+  if (cmd === "run") {
+    return await runRunIssue(rest);
+  }
+
+  if (cmd === "cancel") {
+    return await runCancel(rest);
+  }
+
+  if (cmd === "kill") {
+    return await runKill(rest);
+  }
+
+  if (cmd === "clean") {
+    return await runClean(rest);
+  }
+
+  if (cmd === "investigate" || cmd === "inv") {
+    return await runInvestigate(rest);
   }
 
   if (cmd === "daemon") {

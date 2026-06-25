@@ -1,7 +1,8 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { createLogger } from "./logger.js";
 import { parseWebhookEvent } from "./webhook.js";
-import { isIssueActive, handlePrClosed } from "./spawner.js";
+import { isIssueActive, handlePrClosed, getActiveCounts } from "./spawner.js";
+import { getForwarderStatus } from "./processes.js";
 import type { Config, WebhookResult } from "./types.js";
 
 const log = createLogger("server");
@@ -82,6 +83,18 @@ export async function startServer(
   });
 
   app.get("/health", async () => ({ status: "ok" }));
+
+  // Live daemon state for `april ps` / `april doctor`. Everything here is also
+  // derivable from disk, so the CLI degrades gracefully when the daemon is down.
+  app.get("/status", async () => ({
+    uptime: process.uptime(),
+    assignee: config.assignee,
+    label: config.label,
+    sessionManager: config.sessionManager ?? "tmux",
+    repos: config.repos.map((r) => `${r.owner}/${r.name}`),
+    active: await getActiveCounts(config),
+    forwarders: getForwarderStatus(),
+  }));
 
   await app.listen({ port: config.port, host: "127.0.0.1" });
   log.info(`Server listening on http://127.0.0.1:${config.port}`);

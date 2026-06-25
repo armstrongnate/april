@@ -120,6 +120,21 @@ function spawnForwarder(config: Config, repoKey: string, url: string): Forwarder
   return state;
 }
 
+export interface ForwarderStatus {
+  repoKey: string;
+  alive: boolean;
+  consecutiveFailures: number;
+}
+
+/** Snapshot of the webhook forwarders, for the daemon's /status endpoint. */
+export function getForwarderStatus(): ForwarderStatus[] {
+  return forwarders.map((f) => ({
+    repoKey: f.repoKey,
+    alive: !!f.child && !f.child.killed && f.child.exitCode === null && !f.stopped,
+    consecutiveFailures: f.consecutiveFailures,
+  }));
+}
+
 export function startWebhookForwarders(config: Config): ChildProcess[] {
   const url = `http://localhost:${config.port}/webhook/github`;
 

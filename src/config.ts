@@ -10,7 +10,7 @@ import type { AgentKind, ClaudeConfig, CodexConfig, Config, RepoConfig, SessionM
 
 const log = createLogger("config");
 
-function findConfigPath(): string {
+export function findConfigPath(): string {
   const envPath = process.env.APRIL_CONFIG;
   if (envPath) {
     if (!existsSync(envPath)) {
@@ -38,12 +38,24 @@ function findConfigPath(): string {
   );
 }
 
+/** Whether a binary is resolvable on PATH. Non-throwing; used by `doctor`. */
+export function checkTool(tool: string): boolean {
+  try {
+    execSync(`which ${tool}`, { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The external binaries april needs for this agent + session backend. */
+export function requiredTools(agentCli: string, sessionManager: SessionManagerKind): string[] {
+  return ["gh", "git", agentCli, sessionManager === "herdr" ? "herdr" : "tmux"];
+}
+
 function validateTools(agentCli: string, sessionManager: SessionManagerKind): void {
-  const tools = ["gh", "git", agentCli, sessionManager === "herdr" ? "herdr" : "tmux"];
-  for (const tool of tools) {
-    try {
-      execSync(`which ${tool}`, { stdio: "pipe" });
-    } catch {
+  for (const tool of requiredTools(agentCli, sessionManager)) {
+    if (!checkTool(tool)) {
       throw new Error(
         `Required tool "${tool}" not found on PATH. Install it before running april.`
       );
