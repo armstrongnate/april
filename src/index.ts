@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, unlinkSync, existsSync, mkdirSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { createLogger } from "./logger.js";
 import { loadConfig } from "./config.js";
@@ -12,6 +13,16 @@ import type { FastifyInstance } from "fastify";
 const log = createLogger("main");
 
 const PID_PATH = join(homedir(), ".config", "april", "april.pid");
+
+function readVersion(): string {
+  try {
+    // dist/index.js -> package root
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+    return JSON.parse(readFileSync(join(root, "package.json"), "utf-8")).version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
 
 function checkPidFile(): void {
   if (!existsSync(PID_PATH)) return;
@@ -47,7 +58,7 @@ function removePidFile(): void {
 
 async function main(): Promise<void> {
   console.log("");
-  console.log("  april v0.0.1");
+  console.log(`  april v${readVersion()}`);
   console.log("");
 
   // 1. Load config

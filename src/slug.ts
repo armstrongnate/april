@@ -1,13 +1,14 @@
-export function makeSlug(issueNumber: number, title: string): string {
-  let slug = title
+/** Lowercase, hyphenate, and truncate text at a word boundary for use in names. */
+export function slugify(text: string, maxLen = 40, fallback = "issue"): string {
+  let slug = text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/-{2,}/g, "-")
     .replace(/^-+|-+$/g, "");
 
-  // Truncate to 40 chars at word boundary
-  if (slug.length > 40) {
-    slug = slug.substring(0, 40);
+  // Truncate at a word boundary
+  if (slug.length > maxLen) {
+    slug = slug.substring(0, maxLen);
     const lastHyphen = slug.lastIndexOf("-");
     if (lastHyphen > 0) {
       slug = slug.substring(0, lastHyphen);
@@ -15,10 +16,9 @@ export function makeSlug(issueNumber: number, title: string): string {
     slug = slug.replace(/-+$/, "");
   }
 
-  // Fallback if empty
-  if (slug.length === 0) {
-    slug = "issue";
-  }
+  return slug.length === 0 ? fallback : slug;
+}
 
-  return `gh-${issueNumber}-${slug}`;
+export function makeSlug(issueNumber: number, title: string): string {
+  return `gh-${issueNumber}-${slugify(title)}`;
 }
