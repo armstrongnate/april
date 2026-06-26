@@ -167,9 +167,16 @@ async function confirmSubmitted(paneId: string, attempts = 6, intervalMs = 500):
  * already working (a prior Enter landed even if its confirm timed out — never
  * retype into a running agent), then ensures the text is in the box (typing it
  * only if absent, so retries can't duplicate it), then submits and confirms.
+ *
+ * Once we have submitted (sent Enter on text we confirmed was in the box), the
+ * prompt must never be re-typed. A slow agent can still read as `idle` when a
+ * retry begins while having already consumed the input — so the box reads empty
+ * not because the prompt was lost, but because the agent took it. Re-typing
+ * there delivers the prompt twice; the `submitted` flag below prevents it.
  */
 async function injectPrompt(paneId: string, prompt: string): Promise<AgentStatus | undefined> {
   const signature = promptSignature(prompt);
+  let submitted = false;
 
   for (let attempt = 1; attempt <= INJECT_ATTEMPTS; attempt++) {
     const status = await paneStatus(paneId).catch(() => undefined);
@@ -178,27 +185,41 @@ async function injectPrompt(paneId: string, prompt: string): Promise<AgentStatus
       return status;
     }
 
+    const visible = await promptIsVisible(paneId, signature);
+
+    // We already submitted and the prompt has since left the input box → the
+    // agent consumed it; its status simply hasn't flipped off `idle` yet. Never
+    // re-type into an agent that already took the prompt. Give the status one
+    // more window to catch up, then report whatever we see.
+    if (submitted && !visible) {
+      log.info(`Prompt left the input box in pane ${paneId} after submit (attempt ${attempt}/${INJECT_ATTEMPTS}); agent consumed it, waiting for status to catch up`);
+      await confirmSubmitted(paneId);
+      return paneStatus(paneId).catch(() => undefined);
+    }
+
     // 1. Ensure our text is in the input box — type it only if it isn't there,
     //    so a retry after a failed submit doesn't append a second copy.
-    if (!(await promptIsVisible(paneId, signature))) {
+    if (!visible) {
       await herdrRequest("pane.send_text", { pane_id: paneId, text: prompt });
       await delay(SUBMIT_SETTLE_MS);
+
+      // 2. Still not there → a Claude startup screen ate the burst. Dismiss it
+      //    with Enter and loop to retype. (That Enter may instead have submitted
+      //    real text on a flaky read, so re-check status before retrying.)
+      if (!(await promptIsVisible(paneId, signature))) {
+        log.warn(`Prompt text not visible in pane ${paneId} input (attempt ${attempt}/${INJECT_ATTEMPTS}); dismissing startup screen and retrying`);
+        await herdrRequest("pane.send_keys", { pane_id: paneId, keys: ["Enter"] });
+        await delay(SUBMIT_SETTLE_MS);
+        const dismissed = await paneStatus(paneId).catch(() => undefined);
+        if (isAccepted(dismissed)) return dismissed;
+        continue;
+      }
     }
 
-    // 2. Still not there → a Claude startup screen ate the burst. Dismiss it
-    //    with Enter and loop to retype. (That Enter may instead have submitted
-    //    real text on a flaky read, so re-check status before retrying.)
-    if (!(await promptIsVisible(paneId, signature))) {
-      log.warn(`Prompt text not visible in pane ${paneId} input (attempt ${attempt}/${INJECT_ATTEMPTS}); dismissing startup screen and retrying`);
-      await herdrRequest("pane.send_keys", { pane_id: paneId, keys: ["Enter"] });
-      await delay(SUBMIT_SETTLE_MS);
-      const dismissed = await paneStatus(paneId).catch(() => undefined);
-      if (isAccepted(dismissed)) return dismissed;
-      continue;
-    }
-
-    // 3. Text is in the box — submit it and confirm via agent_status.
+    // 3. Text is in the box — submit it and confirm via agent_status. From here
+    //    on the prompt is committed: mark it submitted so no later pass retypes.
     await herdrRequest("pane.send_keys", { pane_id: paneId, keys: ["Enter"] });
+    submitted = true;
     if (await confirmSubmitted(paneId)) {
       const accepted = await paneStatus(paneId).catch(() => undefined);
       log.info(`Prompt submitted to pane ${paneId} on attempt ${attempt} (status: ${accepted ?? "unknown"})`);
