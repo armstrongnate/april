@@ -57,7 +57,10 @@ export async function run(args: string[]): Promise<number> {
   const slug = `${INVESTIGATE_PREFIX}${shortId}-${slugify(problem, 30, "investigation")}`;
 
   const repoList = config.repos
-    .map((r) => `  - ${r.owner}/${r.name} — ${r.path}`)
+    .map(
+      (r) =>
+        `  - ${r.owner}/${r.name} — ${r.path}${r.watch ? "" : " (investigate-only — april won't run work here on this machine)"}`
+    )
     .join("\n");
 
   const modeLine =
