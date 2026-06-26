@@ -29,6 +29,11 @@ function matchRepo(body: Record<string, unknown>, config: Config): RepoConfig | 
     return null;
   }
 
+  if (!repo.watch) {
+    log.debug(`Repo ${repoOwner}/${repoName} is investigate-only (watch: false), ignoring`);
+    return null;
+  }
+
   return repo;
 }
 

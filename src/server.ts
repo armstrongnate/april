@@ -3,6 +3,7 @@ import { createLogger } from "./logger.js";
 import { parseWebhookEvent } from "./webhook.js";
 import { isIssueActive, handlePrClosed, getActiveCounts } from "./spawner.js";
 import { getForwarderStatus } from "./processes.js";
+import { watchedRepos } from "./work.js";
 import type { Config, WebhookResult } from "./types.js";
 
 const log = createLogger("server");
@@ -91,7 +92,7 @@ export async function startServer(
     assignee: config.assignee,
     label: config.label,
     sessionManager: config.sessionManager ?? "tmux",
-    repos: config.repos.map((r) => `${r.owner}/${r.name}`),
+    repos: watchedRepos(config).map((r) => `${r.owner}/${r.name}`),
     active: await getActiveCounts(config),
     forwarders: getForwarderStatus(),
   }));

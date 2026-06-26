@@ -36,6 +36,16 @@ export function parseIssueRef(ref: string): IssueRef {
 }
 
 /**
+ * Repos the daemon actively watches and runs work for. Repos with `watch: false`
+ * are excluded here — they're configured for `investigate` only (e.g. a repo that
+ * another machine owns). The automatic loop (startup scan, webhook forwarders,
+ * webhook matching) uses this; investigation and cleanup commands use all repos.
+ */
+export function watchedRepos(config: Config): RepoConfig[] {
+  return config.repos.filter((r) => r.watch);
+}
+
+/**
  * Pick the RepoConfig a command should act on. `ref` is an explicit
  * "owner/name" (from `--repo` or an `owner/name#n` issue ref). When absent,
  * defaults to the sole configured repo, else errors with the candidate list.

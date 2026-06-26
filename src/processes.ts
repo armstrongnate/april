@@ -1,5 +1,6 @@
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import { createLogger } from "./logger.js";
+import { watchedRepos } from "./work.js";
 import type { Config } from "./types.js";
 
 const log = createLogger("forwarder");
@@ -138,7 +139,7 @@ export function getForwarderStatus(): ForwarderStatus[] {
 export function startWebhookForwarders(config: Config): ChildProcess[] {
   const url = `http://localhost:${config.port}/webhook/github`;
 
-  for (const repo of config.repos) {
+  for (const repo of watchedRepos(config)) {
     const repoKey = `${repo.owner}/${repo.name}`;
     const state = spawnForwarder(config, repoKey, url);
     forwarders.push(state);

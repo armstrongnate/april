@@ -3,6 +3,9 @@ export interface RepoConfig {
   name: string;
   path: string;
   defaultBranch: string; // default applied during config load
+  watch: boolean; // whether the daemon picks up/runs work for this repo; default true.
+  // `watch: false` makes a repo investigate-only on this machine — handy when the
+  // same repo is watched on another box but you still want to research it here.
   slackChannel?: string; // channel to post PR links to
   postWorktreeHook?: string; // shell command to run after worktree creation (cwd = worktree)
 }

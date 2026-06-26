@@ -158,6 +158,23 @@ Each investigation runs as its own session (named `inv-…`), so it shows up in 
 
 Use `--repo OWNER/NAME` to suggest the owning repo (the agent still decides), and `--dry-run` to print the session name and the exact prompt that would be dispatched without spawning anything.
 
+### Investigate-only repos (`watch: false`)
+
+The candidate repos for investigation are your configured `repos` — the same list the daemon watches. To research a repo **without** having the daemon pick up its tickets on this machine, set `watch: false` on it:
+
+```yaml
+repos:
+  - owner: "instructure"
+    name: "athena-poc"
+    path: "~/Developer/inst/athena/athena-poc"
+  - owner: "instructure-internal"
+    name: "athena-ios"
+    path: "~/Developer/inst/athena/athena-ios"
+    watch: false   # investigate here, but let another machine run the tickets
+```
+
+A `watch: false` repo is excluded from the daemon's work loop — no webhook forwarder, no startup reconciliation, no pickup — and `april run` refuses it. But it stays a full investigation target: it shows up in the `investigate` candidate list and works as a `--repo` hint. This is the multi-machine split — e.g. a Linux box runs `athena-poc`/`athena-api` tickets while a Mac runs `athena-ios`, yet either box can still investigate and file iOS issues (use `--auto`, or label later, and the machine that *does* watch iOS picks them up).
+
 ## Environment variables
 
 The daemon reads extra env vars from `~/.config/april/env`. One `KEY=VALUE` per line, `#` for comments, optional double-quotes around values:

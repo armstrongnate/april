@@ -15,5 +15,9 @@ repos:
     name: "repo-name"
     path: "~/path/to/repo"
     # defaultBranch: "main"         # optional, defaults to main
+    # watch: true                   # optional, defaults to true. Set false to make the
+    #                               # repo investigate-only on this machine — april won't
+    #                               # pick up or run its tickets, but `april investigate`
+    #                               # can still research it (e.g. another box owns the work).
     # slackChannel: "team-channel"  # optional, posts PR link to this channel
     # postWorktreeHook: "pnpm i"   # optional, runs in worktree after creation

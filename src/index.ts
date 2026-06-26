@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { createLogger } from "./logger.js";
 import { loadConfig } from "./config.js";
 import { handleNewIssue, fetchOpenIssues, isIssueActive, getActiveCounts } from "./spawner.js";
+import { watchedRepos } from "./work.js";
 import { startServer } from "./server.js";
 import { startWebhookForwarders, shutdownForwarders } from "./processes.js";
 import type { ChildProcess } from "node:child_process";
@@ -69,7 +70,7 @@ async function main(): Promise<void> {
   writePidFile();
 
   // 3. Reconcile missed issues
-  for (const repo of config.repos) {
+  for (const repo of watchedRepos(config)) {
     log.info(`Checking for missed issues in ${repo.owner}/${repo.name}...`);
     const openIssues = fetchOpenIssues(repo, config);
 
@@ -100,11 +101,15 @@ async function main(): Promise<void> {
 
   // Print startup banner
   const { worktrees, sessions } = await getActiveCounts(config);
-  const repoList = config.repos.map((r) => `${r.owner}/${r.name}`).join(", ");
+  const repoList = watchedRepos(config).map((r) => `${r.owner}/${r.name}`).join(", ");
+  const investigateOnly = config.repos.filter((r) => !r.watch);
 
   console.log(`  Assignee: ${config.assignee}`);
   console.log(`  Label: ${config.label}`);
   console.log(`  Repos: ${repoList}`);
+  if (investigateOnly.length > 0) {
+    console.log(`  Investigate-only: ${investigateOnly.map((r) => `${r.owner}/${r.name}`).join(", ")}`);
+  }
   console.log(`  Session manager: ${config.sessionManager ?? "tmux"}`);
   console.log(`  Active: ${worktrees} worktree${worktrees === 1 ? "" : "s"}, ${sessions} session${sessions === 1 ? "" : "s"}`);
   console.log(`  Server: http://localhost:${config.port}`);

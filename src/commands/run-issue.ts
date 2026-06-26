@@ -38,6 +38,15 @@ export async function run(args: string[]): Promise<number> {
   const config = loadConfig();
   const { repoRef, number } = parseIssueRef(ref);
   const repo = resolveRepo(config, repoFlag ?? repoRef);
+
+  if (!repo.watch) {
+    console.error(
+      `${repo.owner}/${repo.name} is configured as investigate-only (watch: false); ` +
+        `april will not run work for it on this machine. Set watch: true in config to run it here.`
+    );
+    return 1;
+  }
+
   const issue = fetchIssue(repo, number);
 
   console.log(`Starting work on ${repo.owner}/${repo.name}#${issue.number} — "${issue.title}"`);

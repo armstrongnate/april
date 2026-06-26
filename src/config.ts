@@ -172,6 +172,14 @@ export function parseConfigFile(path: string): Config {
         ? repo.defaultBranch.trim()
         : "main";
 
+    let watch = true;
+    if (repo.watch !== undefined && repo.watch !== null) {
+      if (typeof repo.watch !== "boolean") {
+        throw new Error(`config.repos[${i}]: "watch" must be a boolean when provided`);
+      }
+      watch = repo.watch;
+    }
+
     const slackChannel =
       typeof repo.slackChannel === "string" && repo.slackChannel.trim().length > 0
         ? repo.slackChannel.trim()
@@ -182,7 +190,7 @@ export function parseConfigFile(path: string): Config {
         ? repo.postWorktreeHook.trim()
         : undefined;
 
-    return { owner, name, path: resolvedPath, defaultBranch, slackChannel, postWorktreeHook };
+    return { owner, name, path: resolvedPath, defaultBranch, watch, slackChannel, postWorktreeHook };
   });
 
   const config: Config = { assignee, label, llm, sessionManager, skill, claude, codex, port, repos };
@@ -220,7 +228,9 @@ export function loadConfig(): Config {
 
   log.info(
     `Config loaded: assignee=${config.assignee}, label=${config.label}, llm=${config.llm}, ` +
-      `repos=${config.repos.map((r) => `${r.owner}/${r.name}`).join(", ")}`
+      `repos=${config.repos
+        .map((r) => `${r.owner}/${r.name}${r.watch ? "" : " (investigate-only)"}`)
+        .join(", ")}`
   );
 
   return config;
