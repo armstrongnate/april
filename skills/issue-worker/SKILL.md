@@ -43,9 +43,31 @@ Fix anything you find before moving on.
 gh pr create --title "..." --body "..."
 ```
 
-## 6. Post to Slack (if instructed)
+## 6. Post to Slack (if instructed) — exactly once
 
-If the prompt specifies a Slack channel, use the Slack MCP tool to post a message with a link to the PR. Format: `<pr_url|PR> repo-name: title of the pr`
+If the prompt specifies a Slack channel, post a single message linking the PR.
+Format: `<pr_url|PR> repo-name: title of the pr`
+
+**Post the link exactly once per issue, even when multiple agents are working it.**
+If you dispatch sub-agents to round out the work, do NOT give them the Slack
+instruction — posting is the orchestrator's job and happens here, one time.
+
+Guard against duplicates with an atomic marker in the git dir. Only the agent that
+*creates* the marker may post; everyone else skips:
+
+```bash
+marker="$(git rev-parse --git-dir)/april-slack-posted"
+if mkdir "$marker" 2>/dev/null; then
+  echo "won the lock — post to Slack now"
+else
+  echo "already posted — skip"
+fi
+```
+
+`mkdir` is atomic, so this is race-safe even if two agents reach it at the same
+moment. Run it immediately before the Slack MCP call; if it prints "skip", do not
+post. The marker lives in the git dir (never committed) and persists for the life
+of the worktree, so the monitor loop in step 7 will not re-post on later passes.
 
 ## 7. Monitor CI and review feedback
 
